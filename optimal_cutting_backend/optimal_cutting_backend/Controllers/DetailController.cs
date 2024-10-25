@@ -79,5 +79,36 @@ namespace vega.Controllers
         {
             return Ok(await _db.Materials.ToListAsync());
         }
+
+        /// <summary>
+        /// Create new workpiece
+        /// </summary>
+        /// <returns></returns>
+        [HttpPost]
+        [Route("/workpiece")]
+        public async Task<IActionResult> CreateWorkpiece(WorkpieceDTO dto)
+        {
+            var workpiece = new Migrations.DAL.Workpiece
+            {
+                Name = dto.Name,
+                Width = dto.Width,
+                Height = dto.Height,
+            };
+            await _db.Workpieces.AddAsync(workpiece);
+            await _db.SaveChangesAsync();
+
+            return Ok("material is created");
+        }
+
+        /// <summary>
+        /// Get all workpieces
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet]
+        [Route("/workpiece")]
+        public async Task<IActionResult> GetWorkpieces()
+        {
+            return Ok(await _db.Workpieces.ToListAsync());
+        }
     }
 }
