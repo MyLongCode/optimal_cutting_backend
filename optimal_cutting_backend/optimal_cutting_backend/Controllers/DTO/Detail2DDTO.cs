@@ -4,12 +4,12 @@ namespace vega.Controllers.DTO
 {
     public class Detail2DDTO
     {
-        [Name("Length")]
-        [Index(0)]
-        public int Length { get; set; }
         [Name("Width")]
+        [Index(0)]
+        public int Width { get; set; }
+        [Name("Height")]
         [Index(1)]
-        public int Width{ get; set; }
+        public int Height { get; set; }
         [Name("Count")]
         [Index(2)]
         public int Count { get; set; }
