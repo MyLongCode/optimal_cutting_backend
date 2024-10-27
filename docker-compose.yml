@@ -36,16 +36,14 @@ services:
       context: .
       dockerfile: optimal_cutting_backend/optimal_cutting_backend/Dockerfile
     environment:
-        - ASPNETCORE_ENVIRONMENT=Development
+        - ASPNETCORE_ENVIRONMENT=Release
         - ASPNETCORE_URLS=http://+:5000;
-        #- Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
-        #- Kestrel__Certificates__Default__Password=my_secure_password
-    ports:
-      - 5000:5000
     volumes:
       - ~/.aspnet/https:/https:ro
+    restart: always
     depends_on:
       - vega-redis
+      - vega-postgres
 
   vega-postgres:
     image: postgis/postgis:17-3.5-alpine
@@ -54,5 +52,5 @@ services:
       - ./optimal_cutting_backend/postgres/.postgresdata:/var/lib/postgresql/data/
       - ./optimal_cutting_backend/postgres/:/docker-entrypoint-initdb.d
     environment:
-      POSTGRES_USER: "#"
-      POSTGRES_PASSWORD: "#"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "olyannaa213"
