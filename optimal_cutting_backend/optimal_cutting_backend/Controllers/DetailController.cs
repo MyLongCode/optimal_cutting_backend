@@ -7,6 +7,7 @@ using vega.Services.Interfaces;
 
 namespace vega.Controllers
 {
+    [Route("/api/[controller]")]
     public class DetailController : Controller
     {
         private readonly VegaContext _db;
@@ -26,7 +27,6 @@ namespace vega.Controllers
         /// </summary>
         /// <returns></returns>
         [HttpGet]
-        [Route("/detail")]
         public async Task<IActionResult> GetDetails()
         {
             return Ok(await _db.Filenames.ToListAsync());
@@ -37,7 +37,6 @@ namespace vega.Controllers
         /// </summary>
         /// <returns></returns>
         [HttpPost]
-        [Route("/detail")]
         public async Task<IActionResult> CreateDetail(DetailDTO dto, IFormFile file)
         {
             var detail = new Filename
@@ -74,7 +73,7 @@ namespace vega.Controllers
         /// </summary>
         /// <returns></returns>
         [HttpGet]
-        [Route("/detail/material")]
+        [Route("material")]
         public async Task<IActionResult> GetMaterials()
         {
             return Ok(await _db.Materials.ToListAsync());

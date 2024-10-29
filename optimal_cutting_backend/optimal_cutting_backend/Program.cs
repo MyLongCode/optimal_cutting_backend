@@ -96,17 +96,17 @@ builder.Services.AddSingleton<IDXFService, DXFService>();
 var app = builder.Build();
 
 app.UseCors(builder =>
-    builder.WithOrigins("http://localhost:3000")
+    builder.WithOrigins("https://localhost")
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials()
     );
 
-if (app.Environment.IsDevelopment())
-{
+//if (app.Environment.IsDevelopment())
+//{
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+//}
 
 app.UseForwardedHeaders(new ForwardedHeadersOptions {
                 ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto

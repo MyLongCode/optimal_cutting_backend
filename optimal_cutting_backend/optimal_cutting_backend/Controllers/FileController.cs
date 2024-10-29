@@ -11,7 +11,7 @@ using vega.Services.Interfaces;
 
 namespace vega.Controllers
 {
-    [Route("/[controller]")]
+    [Route("/api")]
     public class FileController : Controller
     {
 
@@ -30,7 +30,7 @@ namespace vega.Controllers
         /// <response code="200">Formatting is ok</response>
         /// <response code="400">Input file is null or Invalid file type. Please upload a CSV file</response>
         [HttpPost]
-        [Route("/1d/import/csv")]
+        [Route("1d/import/csv")]
         public async Task<ActionResult> ImportCsv(IFormFile file)
         {
             if (file == null) return StatusCode(400);
@@ -46,7 +46,7 @@ namespace vega.Controllers
         /// <response code="200">Export is ok</response>
         /// <response code="400">Details count = 0</response>
         [HttpPost]
-        [Route("/1d/export/csv")]
+        [Route("1d/export/csv")]
         public async Task<ActionResult> ExportCsv([FromBody] List<DetailOneDivisionDTO> dto)
         {
             if (dto.Count == 0) return BadRequest("details is null");
@@ -59,7 +59,7 @@ namespace vega.Controllers
         /// </summary>
         /// <returns>png scheme cutting</returns>
         [HttpPost]
-        [Route("/1d/export/result/png")]
+        [Route("1d/export/result/png")]
         public async Task<IActionResult> ExportPng([FromBody] Cutting1DResult dto)
         {
             var imageBytes = await _drawService.Draw1DCuttingAsync(dto);
@@ -71,7 +71,7 @@ namespace vega.Controllers
         /// </summary>
         /// <returns>pdf file</returns>
         [HttpPost]
-        [Route("/1d/export/result/pdf")]
+        [Route("1d/export/result/pdf")]
         public async Task<IActionResult> ExportPdf([FromBody] Cutting1DResult dto)
         {
             var imageBytes = await _drawService.Draw1DCuttingAsync(dto);
@@ -96,7 +96,7 @@ namespace vega.Controllers
         /// </summary>
         /// <returns>pdf file</returns>
         [HttpPost]
-        [Route("/1d/export/result/csv")]
+        [Route("1d/export/result/csv")]
         public async Task<IActionResult> ExportResultCSV([FromBody] Cutting1DResult dto)
         {
             var file = _csvService.WriteCSV(dto.Workpieces);

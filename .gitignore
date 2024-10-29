@@ -483,3 +483,4 @@ optimal_cutting_backend/redis/.redisdata/
 optimal_cutting_backend/postgres/.postgresdata/
 optimal_cutting_backend/postgres/init.sql
 optimal_cutting_backend/nginx/certs/
+optimal_cutting_backend/optimal_cutting_frontend/

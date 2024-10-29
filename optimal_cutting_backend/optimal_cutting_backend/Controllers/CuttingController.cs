@@ -5,6 +5,7 @@ using vega.Services.Interfaces;
 
 namespace vega.Controllers
 {
+    [Route("/api")]
     public class CuttingController : Controller
     {
         private readonly ICutting1DService _cutting1DService;
