@@ -136,6 +136,18 @@ namespace vega.Controllers
             return File(file, "application/octet-stream", "export.csv");
         }
 
+        /// <summary>
+        /// draw png scheme 2d cutting caltulating
+        /// </summary>
+        /// <returns>png scheme cutting</returns>
+        [HttpPost]
+        [Route("/2d/export/result/png")]
+        public async Task<IActionResult> ExportPng([FromBody] Cutting2DResult dto)
+        {
+            var imageBytes = await _drawService.Draw2DCuttingAsync(dto);
+            return File(imageBytes, "image/png");
+        }
+
         //check file type
         public static bool IsFileExtensionAllowed(IFormFile file, string[] allowedExtensions)
         {

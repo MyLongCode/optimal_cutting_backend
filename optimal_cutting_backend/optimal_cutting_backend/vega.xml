@@ -44,6 +44,15 @@
             <response code="200">Calculeted is ok</response>
             <response code="500">Detail length > workpiece length</response>
         </member>
+        <member name="M:vega.Controllers.CuttingController.Calculate2DCutting(vega.Controllers.DTO.Calculate2DDTO)">
+            <summary>
+            Method for calculating optimal 2d cutting.
+            </summary>
+            <param name="dto"></param>
+            <returns>Returns the calculated model</returns>
+            <response code="200">Calculeted is ok</response>
+            <response code="500">Detail length > workpiece length</response>
+        </member>
         <member name="M:vega.Controllers.DetailController.GetDetails">
             <summary>
             Get all details
@@ -127,6 +136,12 @@
             <returns>JSON file with details length and count</returns>
             <response code="200">Export is ok</response>
             <response code="400">Details count = 0</response>
+        </member>
+        <member name="M:vega.Controllers.FileController.ExportPng(vega.Models.Cutting2DResult)">
+            <summary>
+            draw png scheme 2d cutting caltulating
+            </summary>
+            <returns>png scheme cutting</returns>
         </member>
     </members>
 </doc>
