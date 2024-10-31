@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Org.BouncyCastle.Crypto.Prng;
 using vega.Controllers.DTO;
 using vega.Models;
 using vega.Services.Interfaces;
@@ -40,7 +41,17 @@ namespace vega.Controllers
         [Route("2d/calculate")]
         public async Task<ActionResult> Calculate2DCutting([FromBody] Calculate2DDTO dto)
         {
-            var res = await _cutting2DService.CalculateCuttingAsync(dto.Details, dto.Workpiece);
+            var details = new List<Detail2D>();
+            foreach (var detail in dto.Details)
+                for (var i = 0; i < detail.Count; i++)
+                    details.Add(new Detail2D()
+                    {
+                        Width = detail.Width,
+                        Height = detail.Height,
+                        X = 0,
+                        Y = 0,
+                    });
+            var res = await _cutting2DService.CalculateCuttingAsync(details, dto.Workpiece);
             return Ok(res);
         }
     }

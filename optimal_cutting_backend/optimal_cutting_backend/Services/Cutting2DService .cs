@@ -37,7 +37,7 @@ namespace vega.Services
 
                 if (currentY + detail.Height > workpiece.Height)
                 {
-                    break;
+                    return result;
                 }
 
                 currentX += detail.Width;

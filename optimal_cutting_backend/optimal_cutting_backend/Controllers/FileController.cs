@@ -1,10 +1,10 @@
-﻿using CsvHelper;
-using iTextSharp.text;
+﻿using iTextSharp.text;
 using iTextSharp.text.pdf;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.VisualBasic.FileIO;
-using System.Globalization;
-using System.Xml.Linq;
+using Microsoft.EntityFrameworkCore;
+using System.IO.Compression;
+using System.Net;
+using System.Net.Http.Headers;
 using vega.Controllers.DTO;
 using vega.Models;
 using vega.Services.Interfaces;
@@ -145,7 +145,23 @@ namespace vega.Controllers
         public async Task<IActionResult> ExportPng([FromBody] Cutting2DResult dto)
         {
             var imageBytes = await _drawService.Draw2DCuttingAsync(dto);
-            return File(imageBytes, "image/png");
+
+            using (var ms = new MemoryStream())
+            {
+                using (var zipArchive = new ZipArchive(ms, ZipArchiveMode.Create, true))
+                {
+                    var imageNumber = 1;
+                    foreach (var image in imageBytes)
+                    {
+                        var entry = zipArchive.CreateEntry($"Заготовка {imageNumber++}.png");
+                        using var stream = entry.Open();
+                        await stream.WriteAsync(image, 0, image.Length);
+                    }
+
+                }
+                ms.Position = 0;
+                return File(ms.ToArray(), "application/zip", "Заготовки");
+            }
         }
 
         //check file type

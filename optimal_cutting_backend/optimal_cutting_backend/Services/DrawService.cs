@@ -110,8 +110,10 @@ namespace vega.Services
             return image.Encode().ToArray();
 
         }
-        public async Task<byte[]> Draw2DCuttingAsync(Cutting2DResult result)
+        public async Task<List<byte[]>> Draw2DCuttingAsync(Cutting2DResult result)
         {
+            var images = new List<byte[]>();
+
             var width = result.Workpiece.Width + 20;
             var height = result.Workpiece.Height + 10;
 
@@ -127,9 +129,9 @@ namespace vega.Services
             blackPaint.Color = SKColors.Black;
             textPaint.Color = SKColors.Black;
             textPaint.TextSize = 14;
-            canvas.Clear(SKColors.Gray);
             foreach (var workpiece in result.Details)
             {
+                canvas.Clear(SKColors.White);
                 foreach (var detail in workpiece)
                 {
                     canvas.DrawRect(new SKRect(detail.X, detail.Y, detail.X + detail.Width, detail.Y + detail.Height), blackPaint);
@@ -137,9 +139,10 @@ namespace vega.Services
                         greenPaint);
                     canvas.DrawText($"{detail.Width}x{detail.Height}", detail.X + 2, detail.Y + 20, textPaint);
                 }
+                images.Add(SKImage.FromBitmap(bitmap).Encode().ToArray());
             }
-            var image = SKImage.FromBitmap(bitmap);
-            return image.Encode().ToArray();
+            
+            return images;
         }
 
         private float NormalizeXCoordinate(int width, string x)
