@@ -57,6 +57,8 @@ builder.Services.AddStackExchangeRedisCache(options =>
 
 builder.Services.AddAuthorization();
 
+builder.Services.AddCors();
+
 var authOptions = builder.Configuration.GetSection("AuthOptions");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -96,11 +98,10 @@ builder.Services.AddSingleton<IDXFService, DXFService>();
 var app = builder.Build();
 
 app.UseCors(builder =>
-    builder.WithOrigins("https://localhost")
-        .AllowAnyHeader()
-        .AllowAnyMethod()
-        .AllowCredentials()
-    );
+     builder.AllowAnyOrigin()
+         .AllowAnyHeader()
+         .AllowAnyMethod()
+     );
 
 //if (app.Environment.IsDevelopment())
 //{
