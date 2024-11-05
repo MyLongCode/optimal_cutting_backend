@@ -23,27 +23,27 @@ namespace vega.Services
                 var summ = 0;
                 if (details.Count == 0) break;
                 var j = 0;
-                while (j < details.Count)
+                while (true)
                 {
+                    if (details.Count == 0) break;
                     if (summ + details[j] <= workpiece)
                     {
                         cut.Add(details[j]);
                         summ += details[j];
                         details.RemoveAt(j);
                         lastWorkpiece = workpiece;
-                        j--;
                     }
                     else
                     {
-                        if (workpieceIndex < workpieces.Count - 1)
+                        if (j < details.Count - 1) j++;
+                        else if (workpieceIndex < workpieces.Count - 1)
                         {
                             workpieceIndex++;
                             workpiece = workpieces[workpieceIndex];
-                            j--;
+                            j = 0;
                         }
                         else break;
                     }
-                    j++;
                 }
                 cuts.Add((lastWorkpiece, cut));
             }
