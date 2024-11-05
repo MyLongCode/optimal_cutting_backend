@@ -18,27 +18,10 @@ To start with, make sure that virualization is abled on your pc and you have doc
 
 ### Project Setup
 
-4) Copy and replace *appsettings.json* in a project's directory
-5) Navigate to *vega.csproj* folder via visual studio terminal
-```
-cd *your local path to folder*
-```
-or
-```
-cd optimal_cutting_backend
-cd optimal_cutting_backend
-```
-6) Generate SSL certificates for development
-```
-dotnet dev-certs https --clear
-dotnet dev-certs https -ep $env:USERPROFILE\.aspnet\https\aspnetapp.pfx -p my_secure_password
-dotnet dev-certs https --trust
-```
-if dev-certs utility is not installed use command:
-```
-dotnet tool install --global dotnet-dev-certs
-```
-7) Run docker on your pc and navigate to *docker-compose.yml* folder 
+4) Copy and replace *"appsettings.json"* in a project's directory
+5) Copy certs into *". ./optimal_cutting_backend/nginx/certs"* folder
+
+6) Run docker on your pc and navigate to *docker-compose.yml* folder 
 ```
 cd *your local path to folder*
 ```
@@ -47,7 +30,7 @@ or
 cd ..
 cd ..
 ```
-8) Build docker-compose
+7) Build docker-compose
 ```
 docker-compose build
 ```
