@@ -44,7 +44,9 @@ namespace vega.Controllers
             var encryptePassword = CalculateSHA256(dto.Password);
             if (encryptePassword != user.Password) return BadRequest("wrong password");
 
-            var identity = new ClaimsIdentity(new GenericIdentity(user.FullName));
+            var genericIdentity = new GenericIdentity(user.FullName);
+            genericIdentity.AddClaim(new Claim(ClaimTypes.Sid, user.Id.ToString()));
+            var identity = new ClaimsIdentity(genericIdentity);
             var tokens = _tokenManager.GetTokens(identity);
 
             return Ok(new AuthResponseDTO() {
@@ -78,8 +80,13 @@ namespace vega.Controllers
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         public IActionResult GetUserIdentity()
         {
-            var currentUser = _context?.HttpContext?.User;
-            return Ok(currentUser.Identity.Name);
+            var user = _context?.HttpContext?.User;
+            if (user == null || user?.Identity?.Name == null)
+                return StatusCode(401);
+            return Ok(new UserInfoDto(){
+                Name = user.Identity.Name,
+                Id = Int32.Parse(user.Claims.First(x => x.Type == ClaimTypes.Sid).Value)
+            });
         }
 
         /// <summary>
