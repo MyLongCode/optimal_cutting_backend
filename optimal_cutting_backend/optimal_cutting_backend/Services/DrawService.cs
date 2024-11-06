@@ -78,31 +78,37 @@ namespace vega.Services
             var bitmap = new SKBitmap(width, height);
             var canvas = new SKCanvas(bitmap);
 
-            var greenPaint = new SKPaint();
+            var colors = new List<SKColor> { new SKColor(175, 244, 158), new SKColor(128, 241, 205), new SKColor(124, 232, 237), new SKColor(158, 219, 244), new SKColor(152, 206, 255), new SKColor(180, 186, 255), new SKColor(227, 158, 244), new SKColor(255, 157, 203), new SKColor(255, 167, 172), new SKColor(244, 183, 158) };
+            var detailColorsDict = new Dictionary<int, SKColor>();
+
+            var detailPaint = new SKPaint();
             var grayPaint = new SKPaint();
             var blackPaint = new SKPaint();
-            var whitePaint = new SKPaint();
-            greenPaint.Color = new SKColor(26, 188, 156);
+            var textPaint = new SKPaint();
             blackPaint.Color = SKColors.Black;
-            whitePaint.Color = SKColors.White;
-            whitePaint.TextSize = 14;
-            grayPaint.Color = new SKColor(127, 140, 141);
+            textPaint.Color = SKColors.Black;
+            textPaint.TextSize = 14;
+            grayPaint.Color = SKColors.LightGray;
             int x = 0;
             int y = 0;
             foreach (var workpiece in result.Workpieces)
             {
                 foreach (var detailWidth in workpiece.Details)
                 {
+                    var key = detailWidth;
+                    var rnd = new Random();
+                    if (!detailColorsDict.ContainsKey(key)) detailColorsDict[key] = colors[rnd.Next(0, colors.Count)];
+                    detailPaint.Color = detailColorsDict[key];
                     var newDetailWidth = (int)(detailWidth * detailWidthCoeff);
                     canvas.DrawRect(new SKRect(x, y, x + newDetailWidth, y + detailHeight), blackPaint);
                     canvas.DrawRect(new SKRect(x + 1, y + 1, x + newDetailWidth - 1, y + detailHeight - 1),
-                        greenPaint);
-                    canvas.DrawText(detailWidth.ToString(), x + 2, y + detailHeight / 2 + 10, whitePaint);
+                        detailPaint);
+                    canvas.DrawText(detailWidth.ToString(), x + 2, y + detailHeight / 2 + 10, textPaint);
                     x += newDetailWidth;
                 }
                 canvas.DrawRect(new SKRect(x, y, (int)(workpiece.Length * detailWidthCoeff), y + detailHeight), blackPaint);
                 canvas.DrawRect(new SKRect(x + 1, y + 1, (int)(workpiece.Length * detailWidthCoeff) - 1, y + detailHeight - 1), grayPaint);
-                canvas.DrawText((workpiece.Length - workpiece.Details.Sum(d => d)).ToString(), x + 2, y + detailHeight / 2 + 10, whitePaint);
+                canvas.DrawText((workpiece.Length - workpiece.Details.Sum(d => d)).ToString(), x + 2, y + detailHeight / 2 + 10, textPaint);
                 x = 0;
                 y += detailHeight;
             }
@@ -114,6 +120,10 @@ namespace vega.Services
         {
             var images = new List<byte[]>();
 
+            var colors = new List<SKColor> { new SKColor(175, 244, 158), new SKColor(128, 241, 205), new SKColor(124, 232, 237), new SKColor(158, 219, 244), new SKColor(152, 206, 255), new SKColor(180, 186, 255), new SKColor(227, 158, 244), new SKColor(255, 157, 203), new SKColor(255, 167, 172), new SKColor(244, 183, 158) };
+            var detailColorsDict = new Dictionary<int, SKColor>();
+
+
             var width = result.Workpiece.Width + 20;
             var height = result.Workpiece.Height + 10;
 
@@ -121,11 +131,10 @@ namespace vega.Services
             var canvas = new SKCanvas(bitmap);
             canvas.Clear();
 
-            var greenPaint = new SKPaint();
+            var detailPaint = new SKPaint();
             var grayPaint = new SKPaint();
             var blackPaint = new SKPaint();
             var textPaint = new SKPaint();
-            greenPaint.Color = new SKColor(26, 188, 156);
             blackPaint.Color = SKColors.Black;
             textPaint.Color = SKColors.Black;
             textPaint.TextSize = 14;
@@ -134,10 +143,16 @@ namespace vega.Services
                 canvas.Clear(SKColors.White);
                 foreach (var detail in workpiece)
                 {
+                    var key = detail.Width * detail.Height;
+                    var rnd = new Random();
+                    if (!detailColorsDict.ContainsKey(key)) detailColorsDict[key] = colors[rnd.Next(0, colors.Count)];
+                    detailPaint.Color = detailColorsDict[key];
                     canvas.DrawRect(new SKRect(detail.X, detail.Y, detail.X + detail.Width, detail.Y + detail.Height), blackPaint);
                     canvas.DrawRect(new SKRect(detail.X + 1, detail.Y + 1, detail.X + detail.Width - 1, detail.Y + detail.Height - 1),
-                        greenPaint);
-                    canvas.DrawText($"{detail.Width}x{detail.Height}", detail.X + 2, detail.Y + 20, textPaint);
+                        detailPaint);
+                    textPaint.TextSize = (Math.Max(12, detail.Width/10));
+                    if (detail.Width > 40 && detail.Height > 20)
+                        canvas.DrawText($"{detail.Width}x{detail.Height}", detail.X + 2, detail.Y + textPaint.TextSize, textPaint);
                 }
                 images.Add(SKImage.FromBitmap(bitmap).Encode().ToArray());
             }
