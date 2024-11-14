@@ -33,6 +33,24 @@ namespace vega.Controllers
         }
 
         /// <summary>
+        /// Get details' designations
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet]
+        [Route("designations")]
+        public async Task<IActionResult> GetDesignations()
+        {
+            var filenames = await _db.Filenames.ToArrayAsync();
+
+            return Ok(
+                 filenames
+                 .Select(x => new { x.Id, x.Designation })
+                 .OrderBy(x => x.Designation)
+                 .GroupBy(x => new string(x.Designation.TakeWhile(x => x != '.').ToArray()))
+                 .ToDictionary(x => x.Key, x => x.ToList()));
+        }
+
+        /// <summary>
         /// Create new detail and generate png file
         /// </summary>
         /// <returns></returns>
