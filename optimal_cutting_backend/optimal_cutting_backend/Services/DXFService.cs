@@ -1,18 +1,42 @@
 ﻿
-using iTextSharp.text.pdf;
-using iTextSharp.text.pdf.qrcode;
 using netDxf;
 using netDxf.Entities;
+using netDxf.Header;
+using netDxf.IO;
 using SkiaSharp;
 using System.Text;
 using vega.Controllers.DTO;
+using vega.Models;
 using vega.Services.Interfaces;
 
 namespace vega.Services
 {
     public class DXFService : IDXFService
     {
-        
+        public async Task<List<byte[]>> Create2DDXFAsync(Cutting2DResult result)
+        {
+            
+            var answer = new List<byte[]>();
+            foreach (var item in result.Details)
+            {
+                var dxf = new DxfDocument();
+                foreach(var detail in item)
+                {
+                    dxf.Entities.Add(new Line(new Vector2(detail.X, detail.Y), new Vector2(detail.X + detail.Width, detail.Y)));
+                    dxf.Entities.Add(new Line(new Vector2(detail.X, detail.Y), new Vector2(detail.X, detail.Y + detail.Height)));
+                    dxf.Entities.Add(new Line(new Vector2(detail.X + detail.Width, detail.Y), new Vector2(detail.X + detail.Width, detail.Y + detail.Height)));
+                    dxf.Entities.Add(new Line(new Vector2(detail.X, detail.Y + detail.Height), new Vector2(detail.X + detail.Width, detail.Y + detail.Height)));
+                }
+                using (MemoryStream stream = new MemoryStream())
+                {
+                    dxf.Save(stream);
+                    byte[] dxfBytes = stream.ToArray();
+                    answer.Add(dxfBytes);
+                }
+            }
+            return answer;
+
+        }
 
         public async Task<List<FigureDTO>> GetDXFAsync(byte[] fileBytes)
         {
@@ -36,7 +60,6 @@ namespace vega.Services
                 }
                     
             }
-
             return ans;
         }
 

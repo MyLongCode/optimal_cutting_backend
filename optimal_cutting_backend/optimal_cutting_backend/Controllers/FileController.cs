@@ -17,10 +17,12 @@ namespace vega.Controllers
 
         private readonly ICSVService _csvService;
         private readonly IDrawService _drawService;
-        public FileController(ICSVService csvService, IDrawService drawService)
+        private readonly IDXFService _dxfService;
+        public FileController(ICSVService csvService, IDrawService drawService, IDXFService dxfService)
         {
             _csvService = csvService;
             _drawService = drawService;
+            _dxfService = dxfService;
         }
         /// <summary>
         /// 1D import csv file and formating him in json
@@ -160,7 +162,33 @@ namespace vega.Controllers
 
                 }
                 ms.Position = 0;
-                return File(ms.ToArray(), "application/zip", "Заготовки");
+                return File(ms.ToArray(), "application/zip", "Заготовки PNG");
+            }
+        }
+
+        /// <summary>
+        /// draw dxf 2d cutting caltulating
+        /// </summary>
+        /// <returns>png scheme cutting</returns>
+        [HttpPost]
+        [Route("/2d/export/result/dxf")]
+        public async Task<IActionResult> ExportDxf([FromBody] Cutting2DResult dto)
+        {
+            var dxfBytes = await _dxfService.Create2DDXFAsync(dto);
+            using (var ms = new MemoryStream())
+            {
+                using (var zipArchive = new ZipArchive(ms, ZipArchiveMode.Create, true))
+                {
+                    var fileNumber = 1;
+                    foreach (var dxf in dxfBytes)
+                    {
+                        var entry = zipArchive.CreateEntry($"Заготовка {fileNumber++}.dxf");
+                        using var stream = entry.Open();
+                        await stream.WriteAsync(dxf, 0, dxf.Length);
+                    }
+                }
+                ms.Position = 0;
+                return File(ms.ToArray(), "application/zip", "Заготовки DXF");
             }
         }
 

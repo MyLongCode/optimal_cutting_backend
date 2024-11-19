@@ -40,6 +40,8 @@ namespace vega.Controllers
         [Route("/detail")]
         public async Task<IActionResult> CreateDetail(DetailDTO dto, IFormFile file)
         {
+            var filename = _db.Filenames.FirstOrDefault(x => x.Designation == dto.Designation);
+            if (filename != null) return BadRequest("detail with this designation is found");
             var detail = new Filename
             {
                 Name = dto.Name,
@@ -50,12 +52,12 @@ namespace vega.Controllers
                 UserId = dto.UserId,
             };
             if (file.Length == 0) return BadRequest("file is null");
-            using var fileStream = file.OpenReadStream();
-            byte[] bytes = new byte[file.Length];
-            fileStream.Read(bytes, 0, (int)file.Length);
             await _db.Filenames.AddAsync(detail);
             await _db.SaveChangesAsync();
 
+            using var fileStream = file.OpenReadStream();
+            byte[] bytes = new byte[file.Length];
+            fileStream.Read(bytes, 0, (int)file.Length);
             var details = await _dxfService.GetDXFAsync(bytes);
             await _db.Figures.AddRangeAsync(details.Select(d => new Figure()
             {
@@ -97,7 +99,7 @@ namespace vega.Controllers
             await _db.Workpieces.AddAsync(workpiece);
             await _db.SaveChangesAsync();
 
-            return Ok("material is created");
+            return Ok("workpiece is created");
         }
 
         /// <summary>
