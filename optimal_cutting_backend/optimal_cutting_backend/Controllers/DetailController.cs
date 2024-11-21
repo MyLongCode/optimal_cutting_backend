@@ -57,6 +57,8 @@ namespace vega.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateDetail(DetailDTO dto, IFormFile file)
         {
+            var filename = _db.Filenames.FirstOrDefault(x => x.Designation == dto.Designation);
+            if (filename != null) return BadRequest("detail with this designation is found");
             var detail = new Filename
             {
                 Name = dto.Name,
@@ -67,12 +69,12 @@ namespace vega.Controllers
                 UserId = dto.UserId,
             };
             if (file.Length == 0) return BadRequest("file is null");
-            using var fileStream = file.OpenReadStream();
-            byte[] bytes = new byte[file.Length];
-            fileStream.Read(bytes, 0, (int)file.Length);
             await _db.Filenames.AddAsync(detail);
             await _db.SaveChangesAsync();
 
+            using var fileStream = file.OpenReadStream();
+            byte[] bytes = new byte[file.Length];
+            fileStream.Read(bytes, 0, (int)file.Length);
             var details = await _dxfService.GetDXFAsync(bytes);
             await _db.Figures.AddRangeAsync(details.Select(d => new Figure()
             {
@@ -95,6 +97,37 @@ namespace vega.Controllers
         public async Task<IActionResult> GetMaterials()
         {
             return Ok(await _db.Materials.ToListAsync());
+        }
+
+        /// <summary>
+        /// Create new workpiece
+        /// </summary>
+        /// <returns></returns>
+        [HttpPost]
+        [Route("/workpiece")]
+        public async Task<IActionResult> CreateWorkpiece(WorkpieceDTO dto)
+        {
+            var workpiece = new Migrations.DAL.Workpiece
+            {
+                Name = dto.Name,
+                Width = dto.Width,
+                Height = dto.Height,
+            };
+            await _db.Workpieces.AddAsync(workpiece);
+            await _db.SaveChangesAsync();
+
+            return Ok("workpiece is created");
+        }
+
+        /// <summary>
+        /// Get all workpieces
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet]
+        [Route("/workpiece")]
+        public async Task<IActionResult> GetWorkpieces()
+        {
+            return Ok(await _db.Workpieces.ToListAsync());
         }
     }
 }

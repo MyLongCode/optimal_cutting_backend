@@ -55,10 +55,10 @@ namespace vega.Services
             var result = new Cutting1DResult();
             for (var i = 0; i < cuts.Count; i++)
             {
-                var workpiece = new Workpiece();
-                workpiece.Length = cuts[i].Item1;
-                workpiece.Details = cuts[i].Item2;
-                workpiece.PercentUsage = Math.Round((double)cuts[i].Item2.Sum(c => c) / cuts[i].Item1, 2);
+                var workpiece = new Workpiece1D();
+                workpiece.Length = workpieceLength;
+                workpiece.Details = cuts[i];
+                workpiece.PercentUsage = Math.Round((double)cuts[i].Sum(c => c) / workpieceLength, 2);
                 result.Workpieces.Add(workpiece);
             }
             result.TotalPercentUsage = Math.Round((double)result.Workpieces.Sum(w => w.PercentUsage)
