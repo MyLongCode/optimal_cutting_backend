@@ -11,7 +11,7 @@ using System.Text;
 
 namespace vega.Controllers
 {
-    [Route("/[controller]")]
+    [Route("/api/[controller]")]
     public class AuthController : Controller
     {
         private readonly ILogger<AuthController> _logger;
@@ -35,7 +35,7 @@ namespace vega.Controllers
         /// <response code="200">Returns JWT access and refresh</response>
         /// <response code="400">If user is not registered in system or password is wrong</response>
         [HttpPost]
-        [Route("/login")]
+        [Route("login")]
         public IActionResult GetTokens([FromForm] AuthDTO dto)
         {
             var user = _db.Users.FirstOrDefault(x => x.Login == dto.Login);
@@ -44,7 +44,9 @@ namespace vega.Controllers
             var encryptePassword = CalculateSHA256(dto.Password);
             if (encryptePassword != user.Password) return BadRequest("wrong password");
 
-            var identity = new ClaimsIdentity(new GenericIdentity(user.FullName));
+            var genericIdentity = new GenericIdentity(user.FullName);
+            genericIdentity.AddClaim(new Claim(ClaimTypes.Sid, user.Id.ToString()));
+            var identity = new ClaimsIdentity(genericIdentity);
             var tokens = _tokenManager.GetTokens(identity);
 
             return Ok(new AuthResponseDTO() {
@@ -59,7 +61,7 @@ namespace vega.Controllers
         /// <returns>User name</returns>
         /// <response code="200">Logout user succefully</response>
         [HttpGet]
-        [Route("/logout")]
+        [Route("logout")]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         public IActionResult DestroySessionTokens()
         {
@@ -74,12 +76,17 @@ namespace vega.Controllers
         /// <response code="200">Returns user info</response>
         /// <response code="401">Not authorized</response>
         [HttpGet]
-        [Route("/user")]
+        [Route("user")]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         public IActionResult GetUserIdentity()
         {
-            var currentUser = _context?.HttpContext?.User;
-            return Ok(currentUser.Identity.Name);
+            var user = _context?.HttpContext?.User;
+            if (user == null || user?.Identity?.Name == null)
+                return StatusCode(401);
+            return Ok(new UserInfoDto(){
+                Name = user.Identity.Name,
+                Id = Int32.Parse(user.Claims.First(x => x.Type == ClaimTypes.Sid).Value)
+            });
         }
 
         /// <summary>
@@ -89,7 +96,7 @@ namespace vega.Controllers
         /// <response code="200">Returns JWT access and refresh</response>
         /// <response code="403">Refresh has expired or not associated with user's access</response>
         [HttpPost]
-        [Route("/refresh-token")]
+        [Route("refresh-token")]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         public IActionResult RefreshAccessToken([FromForm] string refreshToken)
         {

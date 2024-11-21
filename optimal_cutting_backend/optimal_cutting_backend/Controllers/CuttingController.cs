@@ -6,6 +6,7 @@ using vega.Services.Interfaces;
 
 namespace vega.Controllers
 {
+    [Route("/api")]
     public class CuttingController : Controller
     {
         private readonly ICutting1DService _cutting1DService;
@@ -26,7 +27,7 @@ namespace vega.Controllers
         [Route("1d/calculate")]
         public async Task<ActionResult> Calculate1DCutting([FromBody] Calculate1DDTO dto)
         {
-            var res = await _cutting1DService.CalculateCuttingAsync(dto.Details, dto.WorkpieceLength);
+            var res = await _cutting1DService.CalculateCuttingAsync(dto.Details, dto.WorkpiecesLength);
             return Ok(res);
         }
 

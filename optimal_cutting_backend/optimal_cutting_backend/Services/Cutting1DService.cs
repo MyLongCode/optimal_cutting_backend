@@ -1,40 +1,56 @@
-﻿using vega.Models;
+﻿using System.Linq;
+using vega.Models;
 using vega.Services.Interfaces;
 
 namespace vega.Services
 {
     public class Cutting1DService : ICutting1DService
     {
-        public async Task<Cutting1DResult> CalculateCuttingAsync(List<int> details, int workpiece)
+        public async Task<Cutting1DResult> CalculateCuttingAsync(List<int> details, List<int> workpieces)
         {
-            if (details.Max(x => x) > workpiece)
+            workpieces = workpieces.OrderBy(w => w).ToList();
+            if (details.Max() > workpieces.Max())
                 throw new Exception("detail length > workpiece length");
 
-            details = details.OrderBy(x => -x).ToList();
-            var cuts = new List<List<int>>();
+            details = details.OrderByDescending(x => x).ToList();
+            var cuts = new List<(int, List<int>)>();
             while(true)
             {
                 var cut = new List<int>();
+                var workpieceIndex = 0;
+                var workpiece = workpieces[workpieceIndex];
+                var lastWorkpiece = workpiece;
                 var summ = 0;
                 if (details.Count == 0) break;
                 var j = 0;
-                while (j < details.Count)
+                while (true)
                 {
+                    if (details.Count == 0) break;
                     if (summ + details[j] <= workpiece)
                     {
                         cut.Add(details[j]);
                         summ += details[j];
                         details.RemoveAt(j);
-                        j--;
+                        lastWorkpiece = workpiece;
                     }
-                    j++;
+                    else
+                    {
+                        if (j < details.Count - 1) j++;
+                        else if (workpieceIndex < workpieces.Count - 1)
+                        {
+                            workpieceIndex++;
+                            workpiece = workpieces[workpieceIndex];
+                            j = 0;
+                        }
+                        else break;
+                    }
                 }
-                cuts.Add(cut);
+                cuts.Add((lastWorkpiece, cut));
             }
 
-            return CreateResultModel(cuts, workpiece);
+            return CreateResultModel(cuts);
         }
-        private Cutting1DResult CreateResultModel(List<List<int>> cuts, int workpieceLength)
+        private Cutting1DResult CreateResultModel(List<(int, List<int>)> cuts)
         {
             var result = new Cutting1DResult();
             for (var i = 0; i < cuts.Count; i++)

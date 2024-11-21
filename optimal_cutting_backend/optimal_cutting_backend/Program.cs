@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -56,6 +57,8 @@ builder.Services.AddStackExchangeRedisCache(options =>
 
 builder.Services.AddAuthorization();
 
+builder.Services.AddCors();
+
 var authOptions = builder.Configuration.GetSection("AuthOptions");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -96,11 +99,10 @@ builder.Services.AddSingleton<IDXFService, DXFService>();
 var app = builder.Build();
 
 app.UseCors(builder =>
-    builder.WithOrigins("http://localhost:3000")
-        .AllowAnyHeader()
-        .AllowAnyMethod()
-        .AllowCredentials()
-    );
+     builder.AllowAnyOrigin()
+         .AllowAnyHeader()
+         .AllowAnyMethod()
+     );
 
 if (app.Environment.IsDevelopment())
 {
@@ -108,7 +110,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+app.UseForwardedHeaders(new ForwardedHeadersOptions {
+                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+            });
 
 app.UseAuthorization();
 
