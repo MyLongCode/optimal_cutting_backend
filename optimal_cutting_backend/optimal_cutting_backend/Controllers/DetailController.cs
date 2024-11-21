@@ -55,7 +55,7 @@ namespace vega.Controllers
         /// </summary>
         /// <returns></returns>
         [HttpPost]
-        public async Task<IActionResult> CreateDetail(DetailDTO dto, IFormFile file)
+        public async Task<IActionResult> CreateDetail([FromBody] DetailDTO dto, IFormFile file)
         {
             var filename = _db.Filenames.FirstOrDefault(x => x.Designation == dto.Designation);
             if (filename != null) return BadRequest("detail with this designation is found");
@@ -104,8 +104,8 @@ namespace vega.Controllers
         /// </summary>
         /// <returns></returns>
         [HttpPost]
-        [Route("/workpiece")]
-        public async Task<IActionResult> CreateWorkpiece(WorkpieceDTO dto)
+        [Route("workpiece")]
+        public async Task<IActionResult> CreateWorkpiece([FromBody] WorkpieceDTO dto)
         {
             var workpiece = new Migrations.DAL.Workpiece
             {
@@ -124,7 +124,7 @@ namespace vega.Controllers
         /// </summary>
         /// <returns></returns>
         [HttpGet]
-        [Route("/workpiece")]
+        [Route("workpiece")]
         public async Task<IActionResult> GetWorkpieces()
         {
             return Ok(await _db.Workpieces.ToListAsync());

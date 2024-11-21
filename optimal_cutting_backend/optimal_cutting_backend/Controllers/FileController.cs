@@ -32,7 +32,7 @@ namespace vega.Controllers
         /// <response code="200">Formatting is ok</response>
         /// <response code="400">Input file is null or Invalid file type. Please upload a CSV file</response>
         [HttpPost]
-        [Route("/1d/import/csv")]
+        [Route("1d/import/csv")]
         public async Task<ActionResult> ImportCsv1D(IFormFile file)
         {
             if (file == null) return StatusCode(400);
@@ -48,7 +48,7 @@ namespace vega.Controllers
         /// <response code="200">Export is ok</response>
         /// <response code="400">Details count = 0</response>
         [HttpPost]
-        [Route("/1d/export/csv")]
+        [Route("1d/export/csv")]
         public async Task<ActionResult> ExportCsv1D([FromBody] List<Detail1DDTO> dto)
         {
             if (dto.Count == 0) return BadRequest("details is null");
@@ -114,8 +114,8 @@ namespace vega.Controllers
         /// <response code="200">Formatting is ok</response>
         /// <response code="400">Input file is null or Invalid file type. Please upload a CSV file</response>
         [HttpPost]
-        [Route("/2d/import/csv")]
-        public async Task<ActionResult> ImportCsv2D(IFormFile file)
+        [Route("2d/import/csv")]
+        public async Task<ActionResult> ImportCsv2D([FromBody] IFormFile file)
         {
             if (file == null) return StatusCode(400);
             if (!IsFileExtensionAllowed(file, new string[] { ".csv" })) return StatusCode(400);
@@ -130,7 +130,7 @@ namespace vega.Controllers
         /// <response code="200">Export is ok</response>
         /// <response code="400">Details count = 0</response>
         [HttpPost]
-        [Route("/2d/export/csv")]
+        [Route("2d/export/csv")]
         public async Task<ActionResult> ExportCsv2D([FromBody] List<Detail2DDTO> dto)
         {
             if (dto.Count == 0) return BadRequest("details is null");
@@ -143,7 +143,7 @@ namespace vega.Controllers
         /// </summary>
         /// <returns>png scheme cutting</returns>
         [HttpPost]
-        [Route("/2d/export/result/png")]
+        [Route("2d/export/result/png")]
         public async Task<IActionResult> ExportPng([FromBody] Cutting2DResult dto)
         {
             var imageBytes = await _drawService.Draw2DCuttingAsync(dto);
@@ -171,7 +171,7 @@ namespace vega.Controllers
         /// </summary>
         /// <returns>png scheme cutting</returns>
         [HttpPost]
-        [Route("/2d/export/result/dxf")]
+        [Route("2d/export/result/dxf")]
         public async Task<IActionResult> ExportDxf([FromBody] Cutting2DResult dto)
         {
             var dxfBytes = await _dxfService.Create2DDXFAsync(dto);
