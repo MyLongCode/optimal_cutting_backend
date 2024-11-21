@@ -65,7 +65,7 @@
             </summary>
             <returns></returns>
         </member>
-        <member name="M:vega.Controllers.DetailController.CreateDetail(vega.Controllers.DTO.DetailDTO,Microsoft.AspNetCore.Http.IFormFile)">
+        <member name="M:vega.Controllers.DetailController.CreateDetail(vega.Controllers.DTO.DetailDTO)">
             <summary>
             Create new detail and generate png file
             </summary>

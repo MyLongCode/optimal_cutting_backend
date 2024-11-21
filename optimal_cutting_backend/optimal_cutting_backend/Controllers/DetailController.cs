@@ -55,7 +55,7 @@ namespace vega.Controllers
         /// </summary>
         /// <returns></returns>
         [HttpPost]
-        public async Task<IActionResult> CreateDetail([FromBody] DetailDTO dto, IFormFile file)
+        public async Task<IActionResult> CreateDetail([FromForm] DetailDTO dto)
         {
             var filename = _db.Filenames.FirstOrDefault(x => x.Designation == dto.Designation);
             if (filename != null) return BadRequest("detail with this designation is found");
@@ -68,13 +68,13 @@ namespace vega.Controllers
                 MaterialId = dto.MaterialId,
                 UserId = dto.UserId,
             };
-            if (file.Length == 0) return BadRequest("file is null");
+            if (dto.File.Length == 0) return BadRequest("file is null");
             await _db.Filenames.AddAsync(detail);
             await _db.SaveChangesAsync();
 
-            using var fileStream = file.OpenReadStream();
-            byte[] bytes = new byte[file.Length];
-            fileStream.Read(bytes, 0, (int)file.Length);
+            using var fileStream = dto.File.OpenReadStream();
+            byte[] bytes = new byte[dto.File.Length];
+            fileStream.Read(bytes, 0, (int)dto.File.Length);
             var details = await _dxfService.GetDXFAsync(bytes);
             await _db.Figures.AddRangeAsync(details.Select(d => new Figure()
             {
@@ -116,7 +116,7 @@ namespace vega.Controllers
             await _db.Workpieces.AddAsync(workpiece);
             await _db.SaveChangesAsync();
 
-            return Ok("workpiece is created");
+            return Ok(workpiece);
         }
 
         /// <summary>
