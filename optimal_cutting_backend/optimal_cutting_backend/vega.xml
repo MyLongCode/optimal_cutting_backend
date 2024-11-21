@@ -59,6 +59,12 @@
             </summary>
             <returns></returns>
         </member>
+        <member name="M:vega.Controllers.DetailController.GetDesignations">
+            <summary>
+            Get details' designations
+            </summary>
+            <returns></returns>
+        </member>
         <member name="M:vega.Controllers.DetailController.CreateDetail(vega.Controllers.DTO.DetailDTO,Microsoft.AspNetCore.Http.IFormFile)">
             <summary>
             Create new detail and generate png file

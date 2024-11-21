@@ -1,4 +1,5 @@
 ﻿using System.Linq;
+using vega.Migrations.DAL;
 using vega.Models;
 using vega.Services.Interfaces;
 
@@ -6,6 +7,10 @@ namespace vega.Services
 {
     public class Cutting1DService : ICutting1DService
     {
+        public Cutting1DService()
+        {
+        }
+
         public async Task<Cutting1DResult> CalculateCuttingAsync(List<int> details, List<int> workpieces)
         {
             workpieces = workpieces.OrderBy(w => w).ToList();
@@ -56,9 +61,9 @@ namespace vega.Services
             for (var i = 0; i < cuts.Count; i++)
             {
                 var workpiece = new Workpiece1D();
-                workpiece.Length = workpieceLength;
-                workpiece.Details = cuts[i];
-                workpiece.PercentUsage = Math.Round((double)cuts[i].Sum(c => c) / workpieceLength, 2);
+                workpiece.Length = cuts[i].Item1;
+                workpiece.Details = cuts[i].Item2;
+                workpiece.PercentUsage = Math.Round((double)cuts[i].Item2.Sum(c => c) / cuts[i].Item1, 2);
                 result.Workpieces.Add(workpiece);
             }
             result.TotalPercentUsage = Math.Round((double)result.Workpieces.Sum(w => w.PercentUsage)
