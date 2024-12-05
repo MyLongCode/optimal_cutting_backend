@@ -44,7 +44,7 @@ namespace vega.Controllers
 
             return Ok(
                  filenames
-                 .Select(x => new { x.Id, x.Designation })
+                 .Select(x => new { x.Id, x.Designation, x.Thickness, x.MaterialId })
                  .OrderBy(x => x.Designation)
                  .GroupBy(x => new string(x.Designation.TakeWhile(x => x != '.').ToArray()))
                  .ToDictionary(x => x.Key, x => x.ToList()));
