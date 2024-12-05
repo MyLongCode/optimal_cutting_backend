@@ -19,18 +19,16 @@ namespace vega.Services
 
             details = details.OrderByDescending(x => x).ToList();
             var cuts = new List<(int, List<int>)>();
-            while(true)
+            while(details.Count > 0)
             {
                 var cut = new List<int>();
                 var workpieceIndex = 0;
                 var workpiece = workpieces[workpieceIndex];
                 var lastWorkpiece = workpiece;
                 var summ = 0;
-                if (details.Count == 0) break;
                 var j = 0;
-                while (true)
+                while (j < details.Count)
                 {
-                    if (details.Count == 0) break;
                     if (summ + details[j] <= workpiece)
                     {
                         cut.Add(details[j]);

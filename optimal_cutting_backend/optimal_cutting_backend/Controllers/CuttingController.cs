@@ -52,7 +52,7 @@ namespace vega.Controllers
                         X = 0,
                         Y = 0,
                     });
-            var res = await _cutting2DService.CalculateCuttingAsync(details, dto.Workpiece);
+            var res = await _cutting2DService.CalculateCuttingAsync(details, dto.Workpiece, dto.CuttingThickness);
             return Ok(res);
         }
     }

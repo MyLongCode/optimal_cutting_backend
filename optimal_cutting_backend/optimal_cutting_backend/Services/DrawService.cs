@@ -170,7 +170,7 @@ namespace vega.Services
                     canvas.DrawRect(new SKRect(detail.X, detail.Y, detail.X + detail.Width, detail.Y + detail.Height), blackPaint);
                     canvas.DrawRect(new SKRect(detail.X + 1, detail.Y + 1, detail.X + detail.Width - 1, detail.Y + detail.Height - 1),
                         detailPaint);
-                    textPaint.TextSize = (Math.Max(12, detail.Height/10));
+                    textPaint.TextSize = (Math.Max(12, detail.Width/10));
                     if (detail.Width >= 40 && detail.Height >= 20)
                         canvas.DrawText($"{detail.Width}x{detail.Height}", detail.X + 2, detail.Y + textPaint.TextSize, textPaint);
                 }
