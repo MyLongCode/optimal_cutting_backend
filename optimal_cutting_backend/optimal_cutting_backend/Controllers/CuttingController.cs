@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Org.BouncyCastle.Crypto.Prng;
 using vega.Controllers.DTO;
+using vega.Migrations.EF;
 using vega.Models;
 using vega.Services.Interfaces;
 
@@ -11,8 +12,10 @@ namespace vega.Controllers
     {
         private readonly ICutting1DService _cutting1DService;
         private readonly ICutting2DService _cutting2DService;
-        public CuttingController(ICutting1DService cutting1DService, ICutting2DService cutting2DService)
+        private readonly VegaContext _db;
+        public CuttingController(ICutting1DService cutting1DService, ICutting2DService cutting2DService, VegaContext db)
         {
+            _db = db;
             _cutting1DService = cutting1DService;
             _cutting2DService = cutting2DService;
         }
@@ -52,7 +55,10 @@ namespace vega.Controllers
                         X = 0,
                         Y = 0,
                     });
-            var res = await _cutting2DService.CalculateCuttingAsync(details, dto.Workpiece, dto.CuttingThickness);
+            if (dto.WorkpieceId == null) return BadRequest("workpieceId is null");
+            var workpiece = _db.Workpieces.Find(dto.WorkpieceId);
+            if (workpiece == null) return BadRequest("workpiece is not found");
+            var res = await _cutting2DService.CalculateCuttingAsync(details, workpiece, dto.CuttingThickness);
             return Ok(res);
         }
     }

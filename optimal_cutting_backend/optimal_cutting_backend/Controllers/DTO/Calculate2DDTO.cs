@@ -6,7 +6,7 @@ namespace vega.Controllers.DTO
     public class Calculate2DDTO
     {
         public List<Detail2DDTO> Details { get; set; }
-        public Workpiece Workpiece { get; set; }
+        public int WorkpieceId { get; set; }
         public float CuttingThickness { get; set; }
     }
 }
