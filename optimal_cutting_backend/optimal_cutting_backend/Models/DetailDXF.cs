@@ -1,0 +1,66 @@
+﻿using SkiaSharp;
+using vega.Migrations.DAL;
+
+namespace vega.Models
+{
+    public class DetailDXF
+    {
+        public float Width { get; set; } = 0;
+        public float Height { get; set; } = 0;
+        public List<Figure> Figures { get; set; } = new List<Figure>();
+
+        public DetailDXF(List<Figure> figures) 
+        {
+            Figures = figures;
+        }
+        private void GetSize()
+        {
+            var maxX = float.MinValue;
+            var minX = float.MaxValue;
+            var maxY = float.MinValue;
+            var minY = float.MaxValue;
+            foreach (var figure in Figures)
+            {
+                var coorditanes = figure.Coordinates.Split(';');
+                if (figure.TypeId == 1) //line
+                {
+                    var figureMaxX = Math.Max(float.Parse(coorditanes[0]), float.Parse(coorditanes[2]));
+                    var figureMinX = Math.Min(float.Parse(coorditanes[0]), float.Parse(coorditanes[2]));
+                    var figureMaxY = Math.Max(float.Parse(coorditanes[1]), float.Parse(coorditanes[3]));
+                    var figureMinY = Math.Min(float.Parse(coorditanes[1]), float.Parse(coorditanes[3]));
+                    maxX = Math.Max(maxX, figureMaxX);
+                    minX = Math.Min(minX, figureMinX);
+                    maxY = Math.Max(maxY, figureMaxY);
+                    minY = Math.Min(minY, figureMinY);
+                }
+                else if (figure.TypeId == 2 || figure.TypeId == 3) //circle and arc
+                {
+                    var centerX = float.Parse(coorditanes[0]);
+                    var centerY = float.Parse(coorditanes[1]);
+                    var radius = float.Parse(coorditanes[2]);
+                    maxX = Math.Max(centerX + radius, maxX);
+                    minX = Math.Min(centerX - radius, minX);
+                    maxY = Math.Max(centerY + radius, maxY);
+                    minY = Math.Min(centerY - radius, minY);
+                }
+                else if (figure.TypeId == 4) //spline
+                {
+                    coorditanes = figure.Coordinates.Split('/');
+                    for (var i = 0; i < coorditanes.Length - 1; i++)
+                    {
+                        var point = coorditanes[i].Split(';');
+                        var pointX = float.Parse(point[0]);
+                        var pointY = float.Parse(point[1]);
+                        maxX = Math.Max(maxX, pointX);
+                        minX = Math.Min(minX, pointX);
+                        maxY = Math.Max(maxY, pointY);
+                        minY = Math.Min(minY, pointY);
+                    }
+                }
+            }
+
+            this.Width = maxX - minX;
+            this.Height = maxY - minY;
+        }
+    }
+}

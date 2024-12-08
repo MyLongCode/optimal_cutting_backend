@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Org.BouncyCastle.Crypto.Prng;
 using vega.Controllers.DTO;
+using vega.Migrations.EF;
 using vega.Models;
 using vega.Services.Interfaces;
 
@@ -11,8 +13,10 @@ namespace vega.Controllers
     {
         private readonly ICutting1DService _cutting1DService;
         private readonly ICutting2DService _cutting2DService;
-        public CuttingController(ICutting1DService cutting1DService, ICutting2DService cutting2DService)
+        private readonly VegaContext _db;
+        public CuttingController(ICutting1DService cutting1DService, ICutting2DService cutting2DService, VegaContext db)
         {
+            _db = db;
             _cutting1DService = cutting1DService;
             _cutting2DService = cutting2DService;
         }
@@ -54,6 +58,21 @@ namespace vega.Controllers
                     });
             var res = await _cutting2DService.CalculateCuttingAsync(details, dto.Workpiece, dto.CuttingThickness);
             return Ok(res);
+        }
+
+        /// <summary>
+        /// Method for calculating optimal 2d cutting with dxf
+        /// </summary>
+        /// <param name="dto"></param>
+        /// <returns>Returns the calculated model</returns>
+        /// <response code="200">Calculeted is ok</response>
+        /// <response code="500">Detail length > workpiece length</response>
+        [HttpPost]
+        [Route("2d/calculate/dxf")]
+        public async Task<ActionResult> Calculate2DCuttingWithDXF([FromBody] Calculate2DDXFDTO dto)
+        {
+            var details = dto.DetailsId.Select(d => _db.Filenames.Include(f => f.Figures).FirstOrDefault(f => f.Id == d));
+            return Ok(details);
         }
     }
 }
