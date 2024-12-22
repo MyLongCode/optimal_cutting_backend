@@ -192,6 +192,34 @@ namespace vega.Controllers
             }
         }
 
+        /// <summary>
+        /// draw png scheme dxf cutting caltulating
+        /// </summary>
+        /// <returns>png scheme cutting</returns>
+        [HttpPost]
+        [Route("dxf/export/result/png")]
+        public async Task<IActionResult> ExportDXFPng([FromBody] Cutting2DResult dto)
+        {
+            var imageBytes = await _drawService.DrawDXFCuttingAsync(dto);
+
+            using (var ms = new MemoryStream())
+            {
+                using (var zipArchive = new ZipArchive(ms, ZipArchiveMode.Create, true))
+                {
+                    var imageNumber = 1;
+                    foreach (var image in imageBytes)
+                    {
+                        var entry = zipArchive.CreateEntry($"Заготовка {imageNumber++}.png");
+                        using var stream = entry.Open();
+                        await stream.WriteAsync(image, 0, image.Length);
+                    }
+
+                }
+                ms.Position = 0;
+                return File(ms.ToArray(), "application/zip", "Заготовки PNG");
+            }
+        }
+
         //check file type
         public static bool IsFileExtensionAllowed(IFormFile file, string[] allowedExtensions)
         {

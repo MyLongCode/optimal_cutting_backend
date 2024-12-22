@@ -10,12 +10,6 @@ namespace vega.Services
     {
         //Отступы от краёв заготовки
         public int Indent = 10;
-        public async Task<Cutting2DResult> CalculateDXFCuttingAsync(List<DetailDXF> details, Workpiece workpiece, float thickness)
-        {
-            details = details.OrderByDescending(d => d.Height * d.Width).ToList();
-
-            return null;
-        }
         public async Task<Cutting2DResult> CalculateCuttingAsync(List<Detail2D> details, Workpiece workpiece, float thickness)
         {
             if (details.Max(d => d.Width) > workpiece.Width || details.Max(d => d.Height) > workpiece.Height) throw new Exception("detail > workpiece");
@@ -71,11 +65,12 @@ namespace vega.Services
                     else if (isRotated == false)
                     {
                         isRotated = true;
+
                         details[detailNumber] = RotateDetail(detail);
+                        detail.Rotated = !detail.Rotated;
                         detailNumber--;
                     }
                     else isRotated = false;
-
                     detailNumber++;
                 }
                 currX = CanAddToRow(arr, currY);

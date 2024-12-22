@@ -5,13 +5,16 @@ namespace vega.Models
 {
     public class DetailDXF
     {
-        public float Width { get; set; } = 0;
-        public float Height { get; set; } = 0;
+        public float X { get; set; }
+        public float Y { get; set; }
+        public int Width { get; set; } = 0;
+        public int Height { get; set; } = 0;
         public List<Figure> Figures { get; set; } = new List<Figure>();
 
         public DetailDXF(List<Figure> figures) 
         {
             Figures = figures;
+            GetSize();
         }
         private void GetSize()
         {
@@ -21,6 +24,7 @@ namespace vega.Models
             var minY = float.MaxValue;
             foreach (var figure in Figures)
             {
+                figure.Coordinates = figure.Coordinates.Replace('.', ',');
                 var coorditanes = figure.Coordinates.Split(';');
                 if (figure.TypeId == 1) //line
                 {
@@ -59,8 +63,8 @@ namespace vega.Models
                 }
             }
 
-            this.Width = maxX - minX;
-            this.Height = maxY - minY;
+            this.Width = (int) (maxX - minX);
+            this.Height = (int)(maxY - minY);
         }
     }
 }

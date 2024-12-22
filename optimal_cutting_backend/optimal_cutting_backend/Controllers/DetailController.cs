@@ -78,7 +78,7 @@ namespace vega.Controllers
             var details = await _dxfService.GetDXFAsync(bytes);
             await _db.Figures.AddRangeAsync(details.Select(d => new Figure()
             {
-                Coordinates = d.Coorditanes,
+                Coordinates = d.Coordinates,
                 TypeId = d.TypeId,
                 FilenameId = detail.Id,
             }));
