@@ -82,8 +82,7 @@ namespace vega.Controllers
                 .Select(d => _db.Filenames.Include(f => f.Figures).FirstOrDefault(f => f.Id == d))
                 .Select(d => new Detail2D(d.Figures))
                 .ToList();
-            var workpiece = _db.Workpieces.FirstOrDefault(w => w.Id == dto.WorkpieceId);
-            if (workpiece == null) return NotFound("workpiece is not found");
+            var workpiece = new Workpiece() { Height = dto.Workpiece.Height, Width = dto.Workpiece.Width };
             var res = await _cutting2DService.CalculateCuttingAsync(details, workpiece, dto.CuttingThickness);
 
             return Ok(res);
