@@ -220,6 +220,34 @@ namespace vega.Controllers
             }
         }
 
+        /// <summary>
+        /// download pdf scheme dxf cutting calculating
+        /// </summary>
+        /// <returns>pdf file</returns>
+        [HttpPost]
+        [Route("dxf/export/result/pdf")]
+        public async Task<IActionResult> ExportDxfPdf([FromBody] Cutting2DResult dto)
+        {
+            var imagesBytes = await _drawService.DrawDXFCuttingAsync(dto);
+            using (var ms = new MemoryStream())
+            {
+                var document = new Document();
+                PdfWriter.GetInstance(document, ms);
+                document.Open();
+                var table = new PdfPTable(1);
+                foreach (var imageBytes in imagesBytes)
+                {
+                    var image = Image.GetInstance(imageBytes);
+                    table.AddCell(image);
+                }
+                document.Add(table);
+                document.Close();
+
+                var pdfData = ms.ToArray();
+                return File(pdfData, "application/octet-stream", "export.pdf");
+            }
+        }
+
         //check file type
         public static bool IsFileExtensionAllowed(IFormFile file, string[] allowedExtensions)
         {

@@ -170,5 +170,11 @@
             </summary>
             <returns>png scheme cutting</returns>
         </member>
+        <member name="M:vega.Controllers.FileController.ExportDxfPdf(vega.Models.Cutting2DResult)">
+            <summary>
+            download pdf scheme dxf cutting calculating
+            </summary>
+            <returns>pdf file</returns>
+        </member>
     </members>
 </doc>
