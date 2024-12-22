@@ -193,6 +193,34 @@ namespace vega.Controllers
         }
 
         /// <summary>
+        /// download pdf scheme 2d cutting calculating
+        /// </summary>
+        /// <returns>pdf file</returns>
+        [HttpPost]
+        [Route("2d/export/result/pdf")]
+        public async Task<IActionResult> Export2DPdf([FromBody] Cutting2DResult dto)
+        {
+            var imagesBytes = await _drawService.Draw2DCuttingAsync(dto);
+            using (var ms = new MemoryStream())
+            {
+                var document = new Document();
+                PdfWriter.GetInstance(document, ms);
+                document.Open();
+                var table = new PdfPTable(1);
+                foreach (var imageBytes in imagesBytes)
+                {
+                    var image = Image.GetInstance(imageBytes);
+                    table.AddCell(image);
+                }
+                document.Add(table);
+                document.Close();
+
+                var pdfData = ms.ToArray();
+                return File(pdfData, "application/octet-stream", "export.pdf");
+            }
+        }
+
+        /// <summary>
         /// draw png scheme dxf cutting caltulating
         /// </summary>
         /// <returns>png scheme cutting</returns>

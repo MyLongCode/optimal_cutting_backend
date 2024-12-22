@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Org.BouncyCastle.Crypto.Prng;
 using vega.Controllers.DTO;
+using vega.Migrations.DAL;
 using vega.Migrations.EF;
 using vega.Models;
 using vega.Services.Interfaces;
@@ -56,7 +57,12 @@ namespace vega.Controllers
                         X = 0,
                         Y = 0,
                     });
-            var res = await _cutting2DService.CalculateCuttingAsync(details, dto.Workpiece, dto.CuttingThickness);
+            var workpiece = new Workpiece()
+            {
+                Width = dto.Workpiece.Width,
+                Height = dto.Workpiece.Height,
+            };
+            var res = await _cutting2DService.CalculateCuttingAsync(details, workpiece, dto.CuttingThickness);
             return Ok(res);
         }
 
@@ -68,7 +74,7 @@ namespace vega.Controllers
         /// <response code="200">Calculeted is ok</response>
         /// <response code="500">Detail length > workpiece length</response>
         [HttpPost]
-        [Route("2d/calculate/dxf")]
+        [Route("dxf/calculate")]
         public async Task<ActionResult> Calculate2DCuttingWithDXF([FromBody] Calculate2DDXFDTO dto)
         {
             //Get details from DB and calculate sizes (width, height)

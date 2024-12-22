@@ -137,13 +137,6 @@ namespace vega.Services
             var canvas = new SKCanvas(bitmap);
             canvas.Clear();
 
-            var detailPaint = new SKPaint();
-            var grayPaint = new SKPaint();
-            var blackPaint = new SKPaint();
-            var textPaint = new SKPaint();
-            blackPaint.Color = SKColors.Black;
-            textPaint.Color = SKColors.Black;
-            textPaint.TextSize = 14;
             foreach (var workpiece in result.Details)
             {
                 canvas.Clear(SKColors.Black);
