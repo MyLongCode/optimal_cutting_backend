@@ -1,5 +1,6 @@
 ﻿
 using Org.BouncyCastle.Crypto.Prng;
+using vega.Controllers.DTO;
 using vega.Migrations.DAL;
 using vega.Models;
 using vega.Services.Interfaces;
@@ -18,7 +19,7 @@ namespace vega.Services
             while(details.Count > 0)
                 workpieces.Add(CalculateCuttingForWorkpiece(details, workpiece, thickness));
                 
-            return new Cutting2DResult() { Details = workpieces, Workpiece = workpiece };
+            return new Cutting2DResult() { Details = workpieces, Workpiece = new Workpiece2D { Width = workpiece.Width, Height = workpiece.Height} };
         }
         public List<Detail2D> CalculateCuttingForWorkpiece(List<Detail2D> details, Workpiece workpiece, float thickness)
         {
@@ -28,12 +29,12 @@ namespace vega.Services
             var arr = new byte[workpiece.Width][];
             arr = arr.Select(x => new byte[workpiece.Height]).ToArray();
             int currX = 0, currY = 0;
-            int lastY = 0;
             var isRotated = false;
             while(details.Count > 0)
             {
                 var detailNumber = 0;
-                if (currY + details[^1].Height >= workpiece.Height) break;
+                if (currY + details.Min(d => d.Height) >= workpiece.Height ||
+                    currY + details.Min(d => d.Width) >= workpiece.Height) break;
                 while (detailNumber < details.Count)
                 {
                     var detail = details[detailNumber];
@@ -66,10 +67,10 @@ namespace vega.Services
                     {
                         isRotated = true;
                         details[detailNumber] = RotateDetail(detail);
+                        detail.Rotated = !detail.Rotated;
                         detailNumber--;
                     }
                     else isRotated = false;
-
                     detailNumber++;
                 }
                 currX = CanAddToRow(arr, currY);
@@ -97,7 +98,7 @@ namespace vega.Services
 
         public Detail2D DetailTop(List<Detail2D> details, int x, int y, int width)
         {
-            return details.Where(detail => detail.X + detail.Width > x && detail.X < x + width)
+            return details.Where(detail => detail.X + detail.Width > x && detail.X < x + width )
                           .OrderBy(detail => y - detail.Y - detail.Height)
                           .FirstOrDefault();
         }
@@ -116,8 +117,7 @@ namespace vega.Services
             if (x + detail.Width >= arr.Length) return false;
             if (y + detail.Height >= arr[0].Length) return false;
             for (int i = 0; i < detail.Width; i++)
-                for (int j = 0; j < detail.Height; j++)
-                    if (arr[x + i][y + j] == 1) return false;
+                if (arr[x + i][y] == 1) return false;
             return true;
         }
 

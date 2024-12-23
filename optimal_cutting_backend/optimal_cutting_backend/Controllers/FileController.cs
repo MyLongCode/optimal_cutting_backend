@@ -192,6 +192,90 @@ namespace vega.Controllers
             }
         }
 
+        /// <summary>
+        /// download pdf scheme 2d cutting calculating
+        /// </summary>
+        /// <returns>pdf file</returns>
+        [HttpPost]
+        [Route("2d/export/result/pdf")]
+        public async Task<IActionResult> Export2DPdf([FromBody] Cutting2DResult dto)
+        {
+            var imagesBytes = await _drawService.Draw2DCuttingAsync(dto);
+            using (var ms = new MemoryStream())
+            {
+                var document = new Document();
+                PdfWriter.GetInstance(document, ms);
+                document.Open();
+                var table = new PdfPTable(1);
+                foreach (var imageBytes in imagesBytes)
+                {
+                    var image = Image.GetInstance(imageBytes);
+                    table.AddCell(image);
+                }
+                document.Add(table);
+                document.Close();
+
+                var pdfData = ms.ToArray();
+                return File(pdfData, "application/octet-stream", "export.pdf");
+            }
+        }
+
+        /// <summary>
+        /// draw png scheme dxf cutting caltulating
+        /// </summary>
+        /// <returns>png scheme cutting</returns>
+        [HttpPost]
+        [Route("dxf/export/result/png")]
+        public async Task<IActionResult> ExportDXFPng([FromBody] Cutting2DResult dto)
+        {
+            var imageBytes = await _drawService.DrawDXFCuttingAsync(dto);
+
+            using (var ms = new MemoryStream())
+            {
+                using (var zipArchive = new ZipArchive(ms, ZipArchiveMode.Create, true))
+                {
+                    var imageNumber = 1;
+                    foreach (var image in imageBytes)
+                    {
+                        var entry = zipArchive.CreateEntry($"Заготовка {imageNumber++}.png");
+                        using var stream = entry.Open();
+                        await stream.WriteAsync(image, 0, image.Length);
+                    }
+
+                }
+                ms.Position = 0;
+                return File(ms.ToArray(), "application/zip", "Заготовки PNG");
+            }
+        }
+
+        /// <summary>
+        /// download pdf scheme dxf cutting calculating
+        /// </summary>
+        /// <returns>pdf file</returns>
+        [HttpPost]
+        [Route("dxf/export/result/pdf")]
+        public async Task<IActionResult> ExportDxfPdf([FromBody] Cutting2DResult dto)
+        {
+            var imagesBytes = await _drawService.DrawDXFCuttingAsync(dto);
+            using (var ms = new MemoryStream())
+            {
+                var document = new Document();
+                PdfWriter.GetInstance(document, ms);
+                document.Open();
+                var table = new PdfPTable(1);
+                foreach (var imageBytes in imagesBytes)
+                {
+                    var image = Image.GetInstance(imageBytes);
+                    table.AddCell(image);
+                }
+                document.Add(table);
+                document.Close();
+
+                var pdfData = ms.ToArray();
+                return File(pdfData, "application/octet-stream", "export.pdf");
+            }
+        }
+
         //check file type
         public static bool IsFileExtensionAllowed(IFormFile file, string[] allowedExtensions)
         {
