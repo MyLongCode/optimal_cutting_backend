@@ -118,7 +118,7 @@ namespace vega.Controllers
         /// <response code="400">Input file is null or Invalid file type. Please upload a CSV file</response>
         [HttpPost]
         [Route("2d/import/csv")]
-        public async Task<ActionResult> ImportCsv2D([FromBody] IFormFile file)
+        public async Task<ActionResult> ImportCsv2D(IFormFile file)
         {
             if (file == null) return StatusCode(400);
             if (!IsFileExtensionAllowed(file, new string[] { ".csv" })) return StatusCode(400);
