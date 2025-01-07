@@ -10,11 +10,13 @@ namespace vega.Services
     public class Cutting2DService : ICutting2DService
     {
         //Отступы от краёв заготовки
-        public int Indent = 10;
+        public int Indent = 0;
         public async Task<Cutting2DResult> CalculateCuttingAsync(List<Detail2D> details, Workpiece workpiece, float thickness)
         {
-            if (details.Max(d => d.Width) > workpiece.Width || details.Max(d => d.Height) > workpiece.Height) throw new Exception("detail > workpiece");
+            if (details.Max(d => d.Width) > workpiece.Width || details.Max(d => d.Height) > Math.Max(workpiece.Height, workpiece.Width)) throw new Exception("detail > workpiece");
             details = details.OrderByDescending(d => d.Height * d.Width).ToList();
+            if (workpiece.Height > workpiece.Width)
+                (workpiece.Width, workpiece.Height) = (workpiece.Height, workpiece.Width);
             var workpieces = new List<List<Detail2D>>();
             while(details.Count > 0)
                 workpieces.Add(CalculateCuttingForWorkpiece(details, workpiece, thickness));
@@ -29,17 +31,18 @@ namespace vega.Services
             var arr = new byte[workpiece.Width][];
             arr = arr.Select(x => new byte[workpiece.Height]).ToArray();
             int currX = 0, currY = 0;
-            var isRotated = false;
+            var minSize = Math.Min(details.Min(d => d.Height), details.Min(d => d.Width));
             while(details.Count > 0)
             {
                 var detailNumber = 0;
-                if (currY + details.Min(d => d.Height) >= workpiece.Height ||
-                    currY + details.Min(d => d.Width) >= workpiece.Height) break;
+                if (currY + minSize >= workpiece.Height) break;
+                //details = details.Select(d => { d.Rotated = false; return d; }).ToList();
                 while (detailNumber < details.Count)
                 {
                     var detail = details[detailNumber];
                     currX = CanAddToRow(arr, currY);
                     if (currX == -1) break;
+                    if (currX + minSize >= workpiece.Width && details.Count > 1) break;
 
                     if (CanAddDetail(arr, detail, currX, currY))
                     {
@@ -60,17 +63,18 @@ namespace vega.Services
                             AddDetail(arr, detail, currX, currY);
                             result.Add(detail);
                             details.RemoveAt(detailNumber);
+                            if (details.Count > 0)
+                                minSize = Math.Min(details.Min(d => d.Height), details.Min(d => d.Width));
                             detailNumber--;
                         }
                     }
-                    else if (isRotated == false)
+                    else
                     {
-                        isRotated = true;
                         details[detailNumber] = RotateDetail(detail);
                         detail.Rotated = !detail.Rotated;
-                        detailNumber--;
+                        if (detail.Rotated == true)
+                            detailNumber--;
                     }
-                    else isRotated = false;
                     detailNumber++;
                 }
                 currX = CanAddToRow(arr, currY);
@@ -80,8 +84,8 @@ namespace vega.Services
 
             result = result.Select(x =>
             {
-                x.X += 10;
-                x.Y += 10;
+                x.X += Indent;
+                x.Y += Indent;
                 return x;
             }).ToList();
             workpiece.Width += 2 * Indent;

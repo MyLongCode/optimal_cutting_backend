@@ -13,8 +13,8 @@ using vega.Services.Interfaces;
 
 namespace vega.Controllers
 {
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [Route("/api")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public class FileController : Controller
     {
 
