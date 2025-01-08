@@ -182,5 +182,27 @@
             </summary>
             <returns>pdf file</returns>
         </member>
+        <member name="M:vega.Controllers.FileController.ExportDxfFile(vega.Models.Cutting2DResult)">
+            <summary>
+            draw dxf file dxf cutting caltulating
+            </summary>
+            <returns>png scheme cutting</returns>
+        </member>
+        <member name="M:vega.Controllers.FileController.ImportCsvDXF(Microsoft.AspNetCore.Http.IFormFile)">
+            <summary>
+            DXF import csv file and formating him in json
+            </summary>
+            <param name="file"></param>
+            <returns>JSON file with details ids and count</returns>
+        </member>
+        <member name="M:vega.Controllers.FileController.ExportCsvDXF(System.Collections.Generic.List{vega.Controllers.DTO.DetailDxfDTO})">
+            <summary>
+            DXF formating json to csv and export csv file
+            </summary>
+            <param name="file"></param>
+            <returns>JSON file with details id  and count</returns>
+            <response code="200">Export is ok</response>
+            <response code="400">Details count = 0</response>
+        </member>
     </members>
 </doc>

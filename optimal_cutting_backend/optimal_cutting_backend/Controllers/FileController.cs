@@ -8,6 +8,8 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using vega.Controllers.DTO;
+using vega.Migrations.DAL;
+using vega.Migrations.EF;
 using vega.Models;
 using vega.Services.Interfaces;
 
@@ -21,11 +23,13 @@ namespace vega.Controllers
         private readonly ICSVService _csvService;
         private readonly IDrawService _drawService;
         private readonly IDXFService _dxfService;
-        public FileController(ICSVService csvService, IDrawService drawService, IDXFService dxfService)
+        private readonly VegaContext _db;
+        public FileController(ICSVService csvService, IDrawService drawService, IDXFService dxfService, VegaContext db)
         {
             _csvService = csvService;
             _drawService = drawService;
             _dxfService = dxfService;
+            _db = db;
         }
         /// <summary>
         /// 1D import csv file and formating him in json
@@ -277,6 +281,65 @@ namespace vega.Controllers
                 var pdfData = ms.ToArray();
                 return File(pdfData, "application/octet-stream", "export.pdf");
             }
+        }
+
+        /// <summary>
+        /// draw dxf file dxf cutting caltulating
+        /// </summary>
+        /// <returns>png scheme cutting</returns>
+        [HttpPost]
+        [Route("dxf/export/result/dxf")]
+        public async Task<IActionResult> ExportDxfFile([FromBody] Cutting2DResult dto)
+        {
+            var dxfBytes = await _dxfService.Create2DDXFAsync(dto);
+            using (var ms = new MemoryStream())
+            {
+                using (var zipArchive = new ZipArchive(ms, ZipArchiveMode.Create, true))
+                {
+                    var fileNumber = 1;
+                    foreach (var dxf in dxfBytes)
+                    {
+                        var entry = zipArchive.CreateEntry($"Заготовка {fileNumber++}.dxf");
+                        using var stream = entry.Open();
+                        await stream.WriteAsync(dxf, 0, dxf.Length);
+                    }
+                }
+                ms.Position = 0;
+                return File(ms.ToArray(), "application/zip", "Заготовки DXF");
+            }
+        }
+
+        /// <summary>
+        /// DXF import csv file and formating him in json
+        /// </summary>
+        /// <param name="file"></param>
+        /// <returns>JSON file with details ids and count</returns>
+        [HttpPost]
+        [Route("dxf/import/csv")]
+        public async Task<IActionResult> ImportCsvDXF(IFormFile file)
+        {
+            if (file == null) return StatusCode(400);
+            if (!IsFileExtensionAllowed(file, new string[] { ".csv" })) return StatusCode(400);
+            var details = _csvService.ReadCSV<DetailDxfDTO>(file.OpenReadStream()).ToList();
+
+            foreach (var detail in details)
+                if (!_db.Filenames.Any(f => f.Id == detail.Id)) return StatusCode(400);
+            return Ok(details);
+        }
+        /// <summary>
+        /// DXF formating json to csv and export csv file
+        /// </summary>
+        /// <param name="file"></param>
+        /// <returns>JSON file with details id  and count</returns>
+        /// <response code="200">Export is ok</response>
+        /// <response code="400">Details count = 0</response>
+        [HttpPost]
+        [Route("dxf/export/csv")]
+        public async Task<IActionResult> ExportCsvDXF([FromBody] List<DetailDxfDTO> dto)
+        {
+            if (dto.Count == 0) return BadRequest("details is null");
+            var file = _csvService.WriteCSV(dto);
+            return File(file, "application/octet-stream", "export.csv");
         }
 
         //check file type
