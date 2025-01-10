@@ -14,7 +14,7 @@ using vega.Services.Interfaces;
 namespace vega.Controllers
 {
     [Route("/api")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public class FileController : Controller
     {
 
@@ -276,6 +276,32 @@ namespace vega.Controllers
 
                 var pdfData = ms.ToArray();
                 return File(pdfData, "application/octet-stream", "export.pdf");
+            }
+        }
+
+        /// <summary>
+        /// draw dxf file for dxf cutting caltulating
+        /// </summary>
+        /// <returns>png scheme cutting</returns>
+        [HttpPost]
+        [Route("dxf/export/result/dxf")]
+        public async Task<IActionResult> ExportDxfFile([FromBody] Cutting2DResult dto)
+        {
+            var dxfBytes = await _dxfService.CreateDXFAsync(dto);
+            using (var ms = new MemoryStream())
+            {
+                using (var zipArchive = new ZipArchive(ms, ZipArchiveMode.Create, true))
+                {
+                    var fileNumber = 1;
+                    foreach (var dxf in dxfBytes)
+                    {
+                        var entry = zipArchive.CreateEntry($"Заготовка {fileNumber++}.dxf");
+                        using var stream = entry.Open();
+                        await stream.WriteAsync(dxf, 0, dxf.Length);
+                    }
+                }
+                ms.Position = 0;
+                return File(ms.ToArray(), "application/zip", "Заготовки DXF");
             }
         }
 

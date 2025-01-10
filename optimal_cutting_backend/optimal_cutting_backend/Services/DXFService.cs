@@ -16,12 +16,11 @@ namespace vega.Services
     {
         public async Task<List<byte[]>> Create2DDXFAsync(Cutting2DResult result)
         {
-            
             var answer = new List<byte[]>();
-            foreach (var item in result.Details)
+            foreach (var item in result.Workpieces)
             {
                 var dxf = new DxfDocument();
-                foreach(var detail in item)
+                foreach(var detail in item.Details)
                 {
                     dxf.Entities.Add(new Line(new Vector2(detail.X, detail.Y), new Vector2(detail.X + detail.Width, detail.Y)));
                     dxf.Entities.Add(new Line(new Vector2(detail.X, detail.Y), new Vector2(detail.X, detail.Y + detail.Height)));
@@ -37,6 +36,44 @@ namespace vega.Services
             }
             return answer;
 
+        }
+
+        public async Task<List<byte[]>> CreateDXFAsync(Cutting2DResult result)
+        {
+            var answer = new List<byte[]>();
+            foreach (var item in result.Workpieces)
+            {
+                var dxf = new DxfDocument();
+                foreach (var detail in item.Details)
+                {
+                    foreach (var figure in detail.Figures)
+                    {
+                        var coorditanes = figure.Coordinates.Split(';').Select(f => float.Parse(f)).ToList();
+                        if (figure.TypeId == 1)
+                        {
+                            var start = new Vector2(coorditanes[0], coorditanes[1]);
+                            var finish = new Vector2(coorditanes[2], coorditanes[3]);
+                            if (detail.Rotated)
+                            {
+                                (start.X, start.Y) = (-start.Y, start.X);
+                                (finish.X, finish.Y) = (-finish.Y, finish.X);
+                            }
+                            var center = GetDetailCenter(detail.Figures, detail.X, detail.Y);
+                            start += center;
+                            finish += center;
+                            dxf.Entities.Add(new Line(start, finish));
+                        }
+                            
+                    }
+                }
+                using (MemoryStream stream = new MemoryStream())
+                {
+                    dxf.Save(stream);
+                    byte[] dxfBytes = stream.ToArray();
+                    answer.Add(dxfBytes);
+                }
+            }
+            return answer;
         }
 
         public async Task<List<Figure>> GetDXFAsync(byte[] fileBytes)
@@ -63,6 +100,17 @@ namespace vega.Services
             }
             return ans;
         }
+        private Vector2 GetDetailCenter(List<Figure> figures, float detailX = 0, float detailY = 0)
+        {
+            var maxX = figures.Max(f => float.Parse(f.Coordinates.Split(';')[0]));
+            var maxY = figures.Max(f => float.Parse(f.Coordinates.Split(';')[1]));
+            var minX = figures.Min(f => float.Parse(f.Coordinates.Split(';')[0]));
+            var minY = figures.Min(f => float.Parse(f.Coordinates.Split(';')[1]));
 
+            var detailCenterX = (int)(((minX + maxX) / 2) + detailX);
+            var detailCenterY = (int)(((minY + maxY) / 2) + detailY);
+
+            return new Vector2(detailCenterX, detailCenterY);
+        }
     }
 }

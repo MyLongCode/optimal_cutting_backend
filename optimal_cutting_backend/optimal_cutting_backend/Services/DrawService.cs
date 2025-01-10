@@ -64,8 +64,8 @@ namespace vega.Services
             var images = new List<byte[]>();
             var detailColorsDict = new Dictionary<int, SKColor>();
 
-            var width = result.Workpiece.Width;
-            var height = result.Workpiece.Height;
+            var width = result.Workpieces[0].Width;
+            var height = result.Workpieces[0].Height;
 
             var bitmap = new SKBitmap(width, height);
             var canvas = new SKCanvas(bitmap);
@@ -78,10 +78,10 @@ namespace vega.Services
             blackPaint.Color = SKColors.Black;
             textPaint.Color = SKColors.Black;
             textPaint.TextSize = 14;
-            foreach (var workpiece in result.Details)
+            foreach (var workpiece in result.Workpieces)
             {
                 canvas.Clear(SKColors.White);
-                foreach (var detail in workpiece)
+                foreach (var detail in workpiece.Details)
                 {
                     var key = detail.Width * detail.Height;
                     var rnd = new Random();
@@ -130,17 +130,17 @@ namespace vega.Services
             var images = new List<byte[]>();
             var detailColorsDict = new Dictionary<int, SKColor>();
 
-            var width = result.Workpiece.Width;
-            var height = result.Workpiece.Height;
+            var width = result.Workpieces[0].Width;
+            var height = result.Workpieces[0].Height;
 
             var bitmap = new SKBitmap(width, height);
             var canvas = new SKCanvas(bitmap);
             canvas.Clear();
 
-            foreach (var workpiece in result.Details)
+            foreach (var workpiece in result.Workpieces)
             {
                 canvas.Clear(SKColors.Black);
-                foreach (var detail in workpiece)
+                foreach (var detail in workpiece.Details)
                 {
                     if (detail.Rotated) RotateFigures(detail.Figures);
                     var center = GetDetailCenter(detail.Figures, detail.X, detail.Y);
