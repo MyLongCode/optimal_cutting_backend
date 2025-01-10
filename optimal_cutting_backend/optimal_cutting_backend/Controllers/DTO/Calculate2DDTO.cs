@@ -9,10 +9,4 @@ namespace vega.Controllers.DTO
         public Workpiece2D Workpiece { get; set; }
         public float CuttingThickness { get; set; }
     }
-
-    public class Workpiece2D
-    {
-        public int Width { get; set; }
-        public int Height { get; set; }
-    }
 }
