@@ -10,7 +10,7 @@ using vega.Services.Interfaces;
 namespace vega.Controllers
 {
     [Route("/api/[controller]")]
-    //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public class DetailController : Controller
     {
         private readonly VegaContext _db;
