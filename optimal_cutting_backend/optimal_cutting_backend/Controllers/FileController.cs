@@ -1,4 +1,4 @@
-﻿using iTextSharp.text;
+using iTextSharp.text;
 using iTextSharp.text.pdf;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -15,7 +15,7 @@ using vega.Services.Interfaces;
 namespace vega.Controllers
 {
     [Route("/api")]
-    //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public class FileController : Controller
     {
 
