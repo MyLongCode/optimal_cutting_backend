@@ -1,4 +1,4 @@
-﻿using iTextSharp.text;
+using iTextSharp.text;
 using iTextSharp.text.pdf;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -306,6 +306,37 @@ namespace vega.Controllers
                 ms.Position = 0;
                 return File(ms.ToArray(), "application/zip", "Заготовки DXF");
             }
+        }
+        /// <summary>
+        /// DXF import csv file and formating him in json
+        /// </summary>
+        /// <param name="file"></param>
+        /// <returns>JSON file with details ids and count</returns>
+        [HttpPost]
+        [Route("dxf/import/csv")]
+        public async Task<IActionResult> ImportCsvDXF(IFormFile file)
+        {
+            if (file == null) return StatusCode(400);
+            if (!IsFileExtensionAllowed(file, new string[] { ".csv" })) return StatusCode(400);
+            var details = _csvService.ReadCSV<DetailDxfDTO>(file.OpenReadStream()).ToList();
+            foreach (var detail in details)
+                if (!_db.Filenames.Any(f => f.Id == detail.Id)) return StatusCode(400);
+            return Ok(details);
+        }
+        /// <summary>
+        /// DXF formating json to csv and export csv file
+        /// </summary>
+        /// <param name="file"></param>
+        /// <returns>JSON file with details id  and count</returns>
+        /// <response code="200">Export is ok</response>
+        /// <response code="400">Details count = 0</response>
+        [HttpPost]
+        [Route("dxf/export/csv")]
+        public async Task<IActionResult> ExportCsvDXF([FromBody] List<DetailDxfDTO> dto)
+        {
+            if (dto.Count == 0) return BadRequest("details is null");
+            var file = _csvService.WriteCSV(dto);
+            return File(file, "application/octet-stream", "export.csv");
         }
 
         /// <summary>
