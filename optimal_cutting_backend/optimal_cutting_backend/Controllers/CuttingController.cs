@@ -11,7 +11,7 @@ using vega.Services.Interfaces;
 namespace vega.Controllers
 {
     [Route("/api")]
-    //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public class CuttingController : Controller
     {
         private readonly ICutting1DService _cutting1DService;
