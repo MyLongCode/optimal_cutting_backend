@@ -1,4 +1,5 @@
 ﻿
+using System.Globalization;
 using SkiaSharp;
 using vega.Controllers.DTO;
 using vega.Migrations.DAL;
@@ -102,10 +103,10 @@ namespace vega.Services
 
         public async Task<byte[]> DrawDXFAsync(List<Figure> figures)
         {
-            var maxX = figures.Max(f => float.Parse(f.Coordinates.Split(';')[0]));
-            var maxY = figures.Max(f => float.Parse(f.Coordinates.Split(';')[1]));
-            var minX = figures.Min(f => float.Parse(f.Coordinates.Split(';')[0]));
-            var minY = figures.Min(f => float.Parse(f.Coordinates.Split(';')[1]));
+            var maxX = figures.Max(f => float.Parse(f.Coordinates.Split(';')[0], new CultureInfo("ru-RU")));
+            var maxY = figures.Max(f => float.Parse(f.Coordinates.Split(';')[1], new CultureInfo("ru-RU")));
+            var minX = figures.Min(f => float.Parse(f.Coordinates.Split(';')[0], new CultureInfo("ru-RU")));
+            var minY = figures.Min(f => float.Parse(f.Coordinates.Split(';')[1], new CultureInfo("ru-RU")));
             var width = (int)((Math.Abs(minX) + maxX) * 1.2);
             var height = (int)((Math.Abs(minY) + maxY) * 1.2);
             var mainCenterX = (int)((minX + maxX) / 2);
@@ -161,29 +162,31 @@ namespace vega.Services
             var whitePaint = new SKPaint();
             whitePaint.Color = SKColors.White;
             whitePaint.Style = SKPaintStyle.Stroke;
-            var coorditanes = figure.Coordinates.Split(';').Select(f => float.Parse(f)).ToList();
+            var coordinates = figure.Coordinates.Split(';')
+                                                .Select(f => float.Parse(f, new CultureInfo("ru-RU")))
+                                                .ToList();
             //line
             if (figure.TypeId == 1)
             {
-                var start = NormalizeCoordinates(width, height, detailCenterX, detailCenterY, coorditanes[0], coorditanes[1], rotated);
-                var end = NormalizeCoordinates(width, height, detailCenterX, detailCenterY, coorditanes[2], coorditanes[3], rotated);
+                var start = NormalizeCoordinates(width, height, detailCenterX, detailCenterY, coordinates[0], coordinates[1], rotated);
+                var end = NormalizeCoordinates(width, height, detailCenterX, detailCenterY, coordinates[2], coordinates[3], rotated);
                 canvas.DrawLine(new SKPoint(start.X, start.Y), new SKPoint(end.X, end.Y), whitePaint);
             }
             //circle
             if (figure.TypeId == 2)
             {
-                var center = NormalizeCoordinates(width, height, detailCenterX, detailCenterY, coorditanes[0], coorditanes[1], rotated);
-                var radius = coorditanes[2];
+                var center = NormalizeCoordinates(width, height, detailCenterX, detailCenterY, coordinates[0], coordinates[1], rotated);
+                var radius = coordinates[2];
                 canvas.DrawCircle(center.X, center.Y, radius, whitePaint);
                 canvas.DrawCircle(center.X, center.Y, radius - 1, blackPaint);
             }
             //arc
             if (figure.TypeId == 3)
             {
-                var center = NormalizeCoordinates(width, height, detailCenterX, detailCenterY, coorditanes[0], coorditanes[1], rotated);
-                var radius = coorditanes[2];
-                var startAngle = coorditanes[3];
-                var endAngle = coorditanes[4];
+                var center = NormalizeCoordinates(width, height, detailCenterX, detailCenterY, coordinates[0], coordinates[1], rotated);
+                var radius = coordinates[2];
+                var startAngle = coordinates[3];
+                var endAngle = coordinates[4];
                 if (rotated)
                 {
                     startAngle += 90;
@@ -229,20 +232,23 @@ namespace vega.Services
         {
             for(var i = 0; i < figures.Count; i++)
             {
-                var coordinates = figures[i].Coordinates.Split(';').Select(c => float.Parse(c)).ToList();
+                var coordinates = figures[i].Coordinates
+                                            .Split(';')
+                                            .Select(c => float.Parse(c, new CultureInfo("ru-RU")))
+                                            .ToList();
                 (coordinates[0], coordinates[1]) = (-coordinates[1], coordinates[0]);
                 if (figures[i].TypeId == 1) (coordinates[2], coordinates[3]) = (-coordinates[3], coordinates[2]);
                 if (figures[i].TypeId == 3) (coordinates[3], coordinates[4]) = (coordinates[3]+90, coordinates[4]+90);
-                figures[i].Coordinates = String.Join(';', coordinates);
+                figures[i].Coordinates = String.Join(';', coordinates).Replace(".", ","); // Culture fix
             }
         }
 
         private Point GetDetailCenter(List<Figure> figures, float detailX = 0, float detailY = 0)
         {
-            var maxX = figures.Max(f => float.Parse(f.Coordinates.Split(';')[0]));
-            var maxY = figures.Max(f => float.Parse(f.Coordinates.Split(';')[1]));
-            var minX = figures.Min(f => float.Parse(f.Coordinates.Split(';')[0]));
-            var minY = figures.Min(f => float.Parse(f.Coordinates.Split(';')[1]));
+            var maxX = figures.Max(f => float.Parse(f.Coordinates.Split(';')[0], new CultureInfo("ru-RU")));
+            var maxY = figures.Max(f => float.Parse(f.Coordinates.Split(';')[1], new CultureInfo("ru-RU")));
+            var minX = figures.Min(f => float.Parse(f.Coordinates.Split(';')[0], new CultureInfo("ru-RU")));
+            var minY = figures.Min(f => float.Parse(f.Coordinates.Split(';')[1], new CultureInfo("ru-RU")));
 
             var detailCenterX = (int)(((minX + maxX) / 2) - detailX);
             var detailCenterY = (int)(((minY + maxY) / 2) - detailY);
