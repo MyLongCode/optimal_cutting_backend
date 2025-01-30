@@ -88,8 +88,8 @@ namespace vega.Controllers
                 .Select(d => new Detail2D(d.Figures))
                 .ToList();
             var workpiece = new Workpiece() { Height = dto.Workpiece.Height, Width = dto.Workpiece.Width };
-            var res = await _cutting2DService.CalculateCuttingAsync(details, workpiece, dto.CuttingThickness);
             if (details.Max(d => d.Width) > workpiece.Width || details.Max(d => d.Height) > Math.Max(workpiece.Height, workpiece.Width)) return BadRequest("detail > workpiece");
+            var res = await _cutting2DService.CalculateCuttingAsync(details, workpiece, dto.CuttingThickness);
             return Ok(res);
         }
     }
