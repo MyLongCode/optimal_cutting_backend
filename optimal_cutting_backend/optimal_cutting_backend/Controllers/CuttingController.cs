@@ -34,6 +34,8 @@ namespace vega.Controllers
         [Route("1d/calculate")]
         public async Task<ActionResult> Calculate1DCutting([FromBody] Calculate1DDTO dto)
         {
+            if (dto.Details.Max() > dto.WorkpiecesLength.Max())
+                return BadRequest("detail length > workpiece length");
             var res = await _cutting1DService.CalculateCuttingAsync(dto.Details, dto.WorkpiecesLength);
             return Ok(res);
         }
