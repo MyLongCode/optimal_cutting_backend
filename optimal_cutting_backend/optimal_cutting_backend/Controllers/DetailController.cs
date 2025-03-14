@@ -108,7 +108,7 @@ namespace vega.Controllers
             var details = await _db.Filenames.Where(f => dto.DetailsIds.Contains(f.Id)).Include(f => f.Figures).ToListAsync();
             _db.Filenames.RemoveRange(details);
             await _db.SaveChangesAsync();
-            return Ok("Details deleted");
+            return Ok(new DeleteDetailResponse{ Message = "Детали удалены"});
         }
 
         /// <summary>
