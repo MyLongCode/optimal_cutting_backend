@@ -355,7 +355,13 @@ namespace vega.Controllers
             var time = DateTime.UtcNow.ToString("dd-MM-yyyyTHH-mm-ss");
             var user = _httpContextAccessor?.HttpContext?.User;
             var login = user.Claims.First(x => x.Type == "login").Value;
-            return $"{login} {time}{extension}";
+            var filename = $"{login} {time}{extension}";
+
+            var cd = new System.Net.Mime.ContentDisposition { FileName = filename };
+            _httpContextAccessor.HttpContext.Response.Headers.TryAdd("Content-Disposition", cd.ToString());
+            _httpContextAccessor.HttpContext.Response.Headers.TryAdd("File-Name", filename);
+            
+            return filename;
         }
     }
 }
