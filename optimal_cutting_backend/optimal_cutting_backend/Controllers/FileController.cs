@@ -358,9 +358,8 @@ namespace vega.Controllers
             var filename = $"{login} {time}{extension}";
 
             var cd = new System.Net.Mime.ContentDisposition { FileName = filename };
-            _httpContextAccessor.HttpContext.Response.Headers.TryAdd("Content-Disposition", cd.ToString());
             _httpContextAccessor.HttpContext.Response.Headers.TryAdd("File-Name", filename);
-            
+
             return filename;
         }
     }
