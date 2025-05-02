@@ -56,6 +56,8 @@ namespace vega.Controllers
                 for (var i = 0; i < detail.Count; i++)
                     details.Add(new Detail2D()
                     {
+                        Width = detail.Width,
+                        Height = detail.Height,
                         X = 0,
                         Y = 0,
                     });
