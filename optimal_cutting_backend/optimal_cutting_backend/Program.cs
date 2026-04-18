@@ -32,22 +32,22 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "Bearer"
     });
     options.AddSecurityRequirement(new OpenApiSecurityRequirement()
+    {
         {
+            new OpenApiSecurityScheme
             {
-                new OpenApiSecurityScheme
+                Reference = new OpenApiReference
                 {
-                    Reference = new OpenApiReference
-                    {
-                        Type = ReferenceType.SecurityScheme,
-                        Id = "Bearer"
-                    },
-                    Scheme = "oauth2",
-                    Name = "Bearer",
-                    In = ParameterLocation.Header,
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
                 },
-                new List<string>()
-            }
-        });
+                Scheme = "oauth2",
+                Name = "Bearer",
+                In = ParameterLocation.Header,
+            },
+            new List<string>()
+        }
+    });
 });
 
 builder.Services.AddStackExchangeRedisCache(options =>
@@ -71,15 +71,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidAudience = authOptions["Audience"],
             ValidateLifetime = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(authOptions["Key"])),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(authOptions["Key"]!)),
             ValidateIssuerSigningKey = true
-         };
+        };
         options.Events = new JwtBearerEvents
         {
             OnTokenValidated = (TokenValidatedContext context) =>
             {
                 var tokenManager = context.HttpContext.RequestServices.GetService<ITokenManagerService>();
-                if (!tokenManager.IsTokenValid())
+                if (tokenManager != null && !tokenManager.IsTokenValid())
                 {
                     context.Fail("Failed additional validation");
                 }
@@ -87,14 +87,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 return Task.CompletedTask;
             }
         };
-});
+    });
 
 builder.Services.AddScoped<ITokenManagerService, TokenManagerService>();
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 builder.Services.AddScoped<ICSVService, CSVService>();
 builder.Services.AddScoped<ICutting1DService, Cutting1DService>();
+builder.Services.AddScoped<IContourBuilderService, ContourBuilderService>();
+builder.Services.AddScoped<IMaskRasterizerService, MaskRasterizerService>();
+builder.Services.AddScoped<IMaskPlacementService, MaskPlacementService>();
 builder.Services.AddScoped<ICutting2DService, Cutting2DService>();
 builder.Services.AddScoped<IDrawService, DrawService>();
+
 builder.Services.AddHttpClient<IDXFService, DXFService>(client =>
 {
     client.BaseAddress = new Uri("http://127.0.0.1:8000/");
@@ -104,12 +108,12 @@ builder.Services.AddHttpClient<IDXFService, DXFService>(client =>
 
 var app = builder.Build();
 
-app.UseCors(builder =>
-     builder.AllowAnyOrigin()
+app.UseCors(corsBuilder =>
+     corsBuilder.AllowAnyOrigin()
          .AllowAnyHeader()
          .AllowAnyMethod()
          .WithExposedHeaders("Content-Disposition")
-     );
+);
 
 if (app.Environment.IsDevelopment())
 {
@@ -117,10 +121,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions {
-                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-            });
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

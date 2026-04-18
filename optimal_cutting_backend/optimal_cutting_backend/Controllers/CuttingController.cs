@@ -17,12 +17,14 @@ namespace vega.Controllers
         private readonly ICutting1DService _cutting1DService;
         private readonly ICutting2DService _cutting2DService;
         private readonly VegaContext _db;
+
         public CuttingController(ICutting1DService cutting1DService, ICutting2DService cutting2DService, VegaContext db)
         {
             _db = db;
             _cutting1DService = cutting1DService;
             _cutting2DService = cutting2DService;
         }
+
         /// <summary>
         /// Method for calculating optimal 1d cutting.
         /// </summary>
@@ -36,6 +38,7 @@ namespace vega.Controllers
         {
             if (dto.Details.Max() > dto.WorkpiecesLength.Max())
                 return BadRequest("detail length > workpiece length");
+
             var res = await _cutting1DService.CalculateCuttingAsync(dto.Details, dto.WorkpiecesLength);
             return Ok(res);
         }
@@ -53,21 +56,37 @@ namespace vega.Controllers
         {
             var details = new List<Detail2D>();
             foreach (var detail in dto.Details)
+            {
                 for (var i = 0; i < detail.Count; i++)
-                    details.Add(new Detail2D()
+                {
+                    details.Add(new Detail2D
                     {
                         Width = detail.Width,
                         Height = detail.Height,
                         X = 0,
-                        Y = 0,
+                        Y = 0
                     });
-            var workpiece = new Workpiece()
+                }
+            }
+
+            var workpiece = new Workpiece
             {
                 Width = dto.Workpiece.Width,
-                Height = dto.Workpiece.Height,
+                Height = dto.Workpiece.Height
             };
-            if (details.Max(d => d.Width) > workpiece.Width || details.Max(d => d.Height) > Math.Max(workpiece.Height, workpiece.Width)) return BadRequest("detail > workpiece");
-            var res = await _cutting2DService.CalculateCuttingAsync(details, workpiece, dto.CuttingThickness, dto.Indent);
+
+            if (details.Max(d => d.Width) > workpiece.Width || details.Max(d => d.Height) > Math.Max(workpiece.Height, workpiece.Width))
+            {
+                return BadRequest("detail > workpiece");
+            }
+
+            var res = await _cutting2DService.CalculateCuttingAsync(
+                details,
+                workpiece,
+                dto.CuttingThickness,
+                dto.Indent
+            );
+
             return Ok(res);
         }
 
@@ -82,14 +101,38 @@ namespace vega.Controllers
         [Route("dxf/calculate")]
         public async Task<ActionResult> Calculate2DCuttingWithDXF([FromBody] Calculate2DDXFDTO dto)
         {
-            //Get details from DB and calculate sizes (width, height)
             var details = dto.DetailsId
                 .Select(d => _db.Filenames.Include(f => f.Figures).FirstOrDefault(f => f.Id == d))
-                .Select(d => new Detail2D (d.Figures, d.Designation))
+                .Where(d => d != null)
+                .Select(d => new Detail2D(d!.Figures, d.Designation))
                 .ToList();
-            var workpiece = new Workpiece() { Height = dto.Workpiece.Height, Width = dto.Workpiece.Width };
-            if (details.Max(d => d.Width) > workpiece.Width || details.Max(d => d.Height) > Math.Max(workpiece.Height, workpiece.Width)) return BadRequest("detail > workpiece");
-            var res = await _cutting2DService.CalculateCuttingAsync(details, workpiece, dto.CuttingThickness, dto.Indent);
+
+            if (details.Count == 0)
+            {
+                return BadRequest("details is null");
+            }
+
+            var workpiece = new Workpiece
+            {
+                Height = dto.Workpiece.Height,
+                Width = dto.Workpiece.Width
+            };
+
+            if (details.Max(d => d.Width) > workpiece.Width || details.Max(d => d.Height) > Math.Max(workpiece.Height, workpiece.Width))
+            {
+                return BadRequest("detail > workpiece");
+            }
+
+            var res = await _cutting2DService.CalculateCuttingAsync(
+                details,
+                workpiece,
+                dto.CuttingThickness,
+                dto.Indent,
+                dto.GridStep,
+                dto.AllowRotate90,
+                dto.UseMaskNesting
+            );
+
             return Ok(res);
         }
     }

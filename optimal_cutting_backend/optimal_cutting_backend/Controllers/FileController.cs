@@ -15,7 +15,6 @@ using vega.Services.Interfaces;
 namespace vega.Controllers
 {
     [Route("/api")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public class FileController : Controller
     {
 
@@ -353,8 +352,7 @@ namespace vega.Controllers
         private string GetFileName(string extension)
         {
             var time = DateTime.UtcNow.ToString("dd-MM-yyyyTHH-mm-ss");
-            var user = _httpContextAccessor?.HttpContext?.User;
-            var login = user.Claims.First(x => x.Type == "login").Value;
+            var login = "user";
 
             return $"{login} {time}{extension}";
         }

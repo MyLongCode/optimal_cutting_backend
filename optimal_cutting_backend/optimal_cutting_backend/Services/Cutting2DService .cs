@@ -1,6 +1,4 @@
-﻿using Org.BouncyCastle.Crypto.Prng;
-using vega.Controllers.DTO;
-using vega.Migrations.DAL;
+﻿using vega.Migrations.DAL;
 using vega.Models;
 using vega.Services.Interfaces;
 
@@ -8,153 +6,111 @@ namespace vega.Services
 {
     public class Cutting2DService : ICutting2DService
     {
+        private readonly IContourBuilderService _contourBuilderService;
+        private readonly IMaskRasterizerService _maskRasterizerService;
+        private readonly IMaskPlacementService _maskPlacementService;
 
-        public async Task<Cutting2DResult> CalculateCuttingAsync(List<Detail2D> details, Workpiece workpiece, float thickness, int indent)
+        public Cutting2DService(
+            IContourBuilderService contourBuilderService,
+            IMaskRasterizerService maskRasterizerService,
+            IMaskPlacementService maskPlacementService)
         {
-            if (details.Max(d => d.Width) > workpiece.Width || details.Max(d => d.Height) > Math.Max(workpiece.Height, workpiece.Width)) throw new Exception("detail > workpiece");
-            details = details.OrderByDescending(d => d.Height * d.Width).ToList();
-            if (workpiece.Height < workpiece.Width)
-                (workpiece.Width, workpiece.Height) = (workpiece.Height, workpiece.Width);
-            var workpieces = new List<Workpiece2D>();
-            while (details.Count > 0)
-            {
-                details = details.OrderByDescending(d => d.Height * d.Width).ToList();
-                workpieces.Add(CalculateCuttingForWorkpiece(details, workpiece, thickness, indent));
-            }
-
-
-            var result = new Cutting2DResult() { Workpieces = workpieces, TotalPercentUsage = Math.Round(workpieces.Sum(w => w.ProcentUsage) / workpieces.Count, 2) };
-
-            return result;
+            _contourBuilderService = contourBuilderService;
+            _maskRasterizerService = maskRasterizerService;
+            _maskPlacementService = maskPlacementService;
         }
-        public Workpiece2D CalculateCuttingForWorkpiece(List<Detail2D> details, Workpiece workpiece, float thickness, int indent)
+
+        public async Task<Cutting2DResult> CalculateCuttingAsync(
+            List<Detail2D> details,
+            Workpiece workpiece,
+            float thickness,
+            int indent,
+            float gridStep = 1.0f,
+            bool allowRotate90 = true,
+            bool useMaskNesting = true)
         {
-            var result = new List<Detail2D>();
-            workpiece.Width -= 2 * indent;
-            workpiece.Height -= 2 * indent;
-            var arr = new byte[workpiece.Width][];
-            arr = arr.Select(x => new byte[workpiece.Height]).ToArray();
-            int currX = 0, currY = 0;
-            var minSize = Math.Min(details.Min(d => d.Height), details.Min(d => d.Width));
-            var detailsSizes = 0;
-            while (details.Count > 0)
+            if (details == null || details.Count == 0)
             {
-                var detailNumber = 0;
-                if (currY + minSize >= workpiece.Height) break;
-                //details = details.Select(d => { d.Rotated = false; return d; }).ToList();
-                while (detailNumber < details.Count)
+                return await Task.FromResult(new Cutting2DResult
                 {
-                    var detail = details[detailNumber];
-                    currX = CanAddToRow(arr, currY);
-                    if (currX == -1) break;
-                    if (currX + minSize >= workpiece.Width && details.Count > 1) break;
-
-                    if (CanAddDetail(arr, detail, currX, currY))
-                    {
-                        var leftDetail = DetailLeft(result, currX, currY, detail.Height);
-                        var topDetail = DetailTop(result, currX, currY, detail.Width);
-                        if (leftDetail != null)
-                        {
-                            detail.X = (float)Math.Round(leftDetail.X + leftDetail.Width + thickness);
-                            currX = (int)detail.X;
-                        }
-                        else detail.X = currX;
-
-                        if (topDetail != null)
-                            detail.Y = (float)Math.Round(topDetail.Y + topDetail.Height + thickness);
-                        else
-                            detail.Y = currY;
-
-                        if (CanAddDetail(arr, detail, currX, currY))
-                        {
-                            AddDetail(arr, detail, currX, currY);
-                            detailsSizes += detail.Width * detail.Height;
-                            result.Add(detail);
-                            details.RemoveAt(detailNumber);
-                            if (details.Count > 0)
-                                minSize = Math.Min(details.Min(d => d.Height), details.Min(d => d.Width));
-                            detailNumber--;
-                        }
-                        else
-                        {
-                            detail.X = 0;
-                            detail.Y = 0;
-                        }
-                    }
-                    else
-                    {
-                        details[detailNumber] = RotateDetail(detail);
-                        detail.Rotated = !detail.Rotated;
-                        if (detail.Rotated == true)
-                            detailNumber--;
-                    }
-                    detailNumber++;
-                }
-                currX = CanAddToRow(arr, currY);
-                if (currX != -1) arr[currX][currY] = 1;
-                else currY++;
+                    Workpieces = new List<Workpiece2D>(),
+                    TotalPercentUsage = 0,
+                    Algorithm = "mask",
+                    GridStep = gridStep
+                });
             }
 
-            result = result.Select(x =>
+            if (gridStep <= 0)
             {
-                x.X += indent;
-                x.Y += indent;
-                return x;
-            }).ToList();
-            var procentUsage = Math.Round((double)detailsSizes / (workpiece.Height * workpiece.Width), 2);
-            workpiece.Width += 2 * indent;
-            workpiece.Height += 2 * indent;
-            var resultWorkpiece = new Workpiece2D { Details = result, Width = workpiece.Width, Height = workpiece.Height };
-            resultWorkpiece.ProcentUsage = procentUsage;
-            return resultWorkpiece;
+                gridStep = 1.0f;
+            }
+
+            foreach (var detail in details)
+            {
+                _contourBuilderService.BuildGeometry(detail);
+                _maskRasterizerService.RasterizeDetail(detail, gridStep, thickness);
+            }
+
+            ValidateMaskSizes(details, workpiece, indent);
+
+            var remaining = details.ToList();
+            var workpieces = new List<Workpiece2D>();
+
+            while (remaining.Count > 0)
+            {
+                var resultWorkpiece = _maskPlacementService.PlaceSingleWorkpiece(
+                    remaining,
+                    workpiece,
+                    indent,
+                    gridStep,
+                    allowRotate90);
+
+                if (resultWorkpiece.Details.Count == 0)
+                {
+                    throw new Exception("detail > workpiece");
+                }
+
+                workpieces.Add(resultWorkpiece);
+            }
+
+            var result = new Cutting2DResult
+            {
+                Workpieces = workpieces,
+                TotalPercentUsage = workpieces.Count == 0
+                    ? 0
+                    : Math.Round(workpieces.Sum(w => w.ProcentUsage) / workpieces.Count, 2),
+                Algorithm = useMaskNesting ? "mask" : "mask",
+                GridStep = gridStep
+            };
+
+            return await Task.FromResult(result);
         }
 
-        public Detail2D DetailLeft(List<Detail2D> details, int x, int y, int height)
+        private static void ValidateMaskSizes(List<Detail2D> details, Workpiece workpiece, int indent)
         {
-            return details.Where(detail => detail.Y + detail.Height > y && detail.Y < y + height && detail.X + detail.Width <= x)
-                           .OrderBy(detail => x - detail.X - detail.Width)
-                           .FirstOrDefault();
-        }
+            var usableWidth = workpiece.Width - 2 * indent;
+            var usableHeight = workpiece.Height - 2 * indent;
 
-        public Detail2D DetailTop(List<Detail2D> details, int x, int y, int width)
-        {
-            var det = details.Where(detail => detail.X + detail.Width > x && detail.X < x + width && detail.Y + detail.Height >= y)
-                          .OrderBy(detail => y - detail.Y - detail.Height);
-            return det.FirstOrDefault();
-        }
+            if (usableWidth <= 0 || usableHeight <= 0)
+            {
+                throw new Exception("workpiece size is too small");
+            }
 
-        public Detail2D RotateDetail(Detail2D detail)
-        {
-            var width = detail.Width;
-            detail.Width = detail.Height;
-            detail.Height = width;
-            return detail;
-        }
+            foreach (var detail in details)
+            {
+                var fitsNormal = detail.Mask0 != null
+                                 && detail.Mask0.WidthCells * detail.Mask0.GridStep <= usableWidth
+                                 && detail.Mask0.HeightCells * detail.Mask0.GridStep <= usableHeight;
 
-        public bool CanAddDetail(byte[][] arr, Detail2D detail, int x, int y)
-        {
-            if (x < 0 || y < 0) return false;
-            if (x + detail.Width > arr.Length) return false;
-            if (y + detail.Height > arr[0].Length) return false;
-            var z = 0;
-            if (detail.X - x > 0 && detail.X > 0) z++;
-            for (var i = z; i < detail.Width - 1; i++)
-                if (arr[x + i][y] > 0) return false;
-            return true;
-        }
+                var fitsRotated = detail.Mask90 != null
+                                  && detail.Mask90.WidthCells * detail.Mask90.GridStep <= usableWidth
+                                  && detail.Mask90.HeightCells * detail.Mask90.GridStep <= usableHeight;
 
-        public int CanAddToRow(byte[][] arr, int y)
-        {
-            for (int i = 0; i < arr.Length; i++)
-                if (arr[i][y] == 0) return i;
-            return -1;
-        }
-
-        public void AddDetail(byte[][] arr, Detail2D detail, int x, int y)
-        {
-            for (int i = 0; i < detail.Width; i++)
-                for (int j = 0; j < detail.Height; j++)
-                    arr[x + i][y + j]++;
+                if (!fitsNormal && !fitsRotated)
+                {
+                    throw new Exception("detail > workpiece");
+                }
+            }
         }
     }
 }
