@@ -14,6 +14,9 @@ namespace vega.Services
 {
     public class DXFService : IDXFService
     {
+        public DXFService()
+        {
+        }
         public async Task<List<byte[]>> Create2DDXFAsync(Cutting2DResult result)
         {
             var answer = new List<byte[]>();
