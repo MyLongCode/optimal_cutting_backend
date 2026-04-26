@@ -84,7 +84,7 @@ namespace vega.Controllers
                     throw new Exception("Invalid DXF file format");
                 }
 
-                
+
                 var detail = new Filename
                 {
                     Name = dto.Name,
@@ -92,7 +92,7 @@ namespace vega.Controllers
                     Thickness = dto.Thickness,
                     FileName = dto.Filename,
                     MaterialId = dto.MaterialId,
-                    UserId = Int32.Parse(_accessor.HttpContext.User.Claims.First(x => x.Type == ClaimTypes.Sid).Value)
+                    UserId = 0
                 };
 
                 await _db.Filenames.AddAsync(detail);

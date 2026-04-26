@@ -210,5 +210,17 @@
             <response code="200">Export is ok</response>
             <response code="400">Details count = 0</response>
         </member>
+        <member name="T:vega.Migrations.Initial">
+            <inheritdoc />
+        </member>
+        <member name="M:vega.Migrations.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:vega.Migrations.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:vega.Migrations.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
     </members>
 </doc>
