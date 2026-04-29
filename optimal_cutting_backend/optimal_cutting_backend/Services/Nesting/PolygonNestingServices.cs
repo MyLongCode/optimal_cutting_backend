@@ -88,10 +88,10 @@ public class NfpService : INfpService
     }
 
     private static PathD ToPathD(Coordinate[] coords)
-        => new(coords.Take(coords.Length - 1).Select(c => new PointD(c.X, c.Y)));
+        => coords.Take(coords.Length - 1).Select(c => new PointD(c.X, c.Y)).ToList();
 
     private static PathD ReflectAroundOrigin(Coordinate[] coords)
-        => new(coords.Take(coords.Length - 1).Select(c => new PointD(-c.X, -c.Y)));
+        => coords.Take(coords.Length - 1).Select(c => new PointD(-c.X, -c.Y)).ToList();
 }
 
 public class PlacementCandidateGenerator : IPlacementCandidateGenerator
