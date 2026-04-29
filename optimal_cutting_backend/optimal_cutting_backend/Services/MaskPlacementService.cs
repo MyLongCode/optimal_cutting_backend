@@ -4,6 +4,7 @@ using vega.Services.Interfaces;
 
 namespace vega.Services
 {
+    [Obsolete("Legacy raster/mask placement; use polygon nesting services.")]
     public class MaskPlacementService : IMaskPlacementService
     {
         public Workpiece2D PlaceSingleWorkpiece(
