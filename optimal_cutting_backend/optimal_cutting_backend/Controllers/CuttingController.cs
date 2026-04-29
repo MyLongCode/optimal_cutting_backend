@@ -7,6 +7,8 @@ using vega.Migrations.DAL;
 using vega.Migrations.EF;
 using vega.Models;
 using vega.Services.Interfaces;
+using vega.Controllers.DTO.Nesting;
+using vega.Services.Interfaces.Nesting;
 
 namespace vega.Controllers
 {
@@ -16,12 +18,14 @@ namespace vega.Controllers
         private readonly ICutting1DService _cutting1DService;
         private readonly ICutting2DService _cutting2DService;
         private readonly VegaContext _db;
+        private readonly IPolygonNestingService _polygonNestingService;
 
-        public CuttingController(ICutting1DService cutting1DService, ICutting2DService cutting2DService, VegaContext db)
+        public CuttingController(ICutting1DService cutting1DService, ICutting2DService cutting2DService, VegaContext db, IPolygonNestingService polygonNestingService)
         {
             _db = db;
             _cutting1DService = cutting1DService;
             _cutting2DService = cutting2DService;
+            _polygonNestingService = polygonNestingService;
         }
 
         /// <summary>
@@ -134,5 +138,14 @@ namespace vega.Controllers
 
             return Ok(res);
         }
+
+        [HttpPost]
+        [Route("cutting2d/nesting")]
+        public ActionResult CalculatePolygonNesting([FromBody] Cutting2DNestingDTO dto)
+        {
+            var res = _polygonNestingService.Nest(dto);
+            return Ok(res);
+        }
+
     }
 }

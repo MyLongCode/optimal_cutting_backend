@@ -9,6 +9,8 @@ using System.Text;
 using vega.Migrations.EF;
 using vega.Services;
 using vega.Services.Interfaces;
+using vega.Services.Interfaces.Nesting;
+using vega.Services.Nesting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -50,11 +52,6 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-builder.Services.AddStackExchangeRedisCache(options =>
-{
-    options.Configuration = builder.Configuration["RedisCacheOptions:Configuration"];
-    options.InstanceName = builder.Configuration["RedisCacheOptions:InstanceName"];
-});
 
 builder.Services.AddAuthorization();
 
@@ -100,6 +97,12 @@ builder.Services.AddScoped<ICutting2DService, Cutting2DService>();
 builder.Services.AddScoped<IDrawService, DrawService>();
 
 builder.Services.AddScoped<IDXFService, DXFService>();
+builder.Services.AddScoped<IGeometryNormalizer, GeometryNormalizer>();
+builder.Services.AddScoped<IPolygonValidator, PolygonValidator>();
+builder.Services.AddScoped<INfpService, NfpService>();
+builder.Services.AddScoped<IPlacementCandidateGenerator, PlacementCandidateGenerator>();
+builder.Services.AddScoped<INestingSolver, NestingSolver>();
+builder.Services.AddScoped<IPolygonNestingService, PolygonNestingService>();
 
 var app = builder.Build();
 

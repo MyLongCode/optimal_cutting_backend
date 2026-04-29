@@ -6,6 +6,7 @@ using vega.Services.Interfaces;
 
 namespace vega.Services
 {
+    [Obsolete("Legacy raster/mask placement; use polygon nesting services.")]
     public class MaskRasterizerService : IMaskRasterizerService
     {
         public void RasterizeDetail(Detail2D detail, float gridStep, float clearance)
