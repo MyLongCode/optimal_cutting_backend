@@ -7,7 +7,8 @@ namespace vega.Services
 {
     public class ContourBuilderService : IContourBuilderService
     {
-        private const float JoinTolerance = 0.5f;
+        private const float EndpointTolerance = 2.0f;
+        private const float DuplicatePointTolerance = 0.05f;
 
         public void BuildGeometry(Detail2D detail)
         {
@@ -17,75 +18,62 @@ namespace vega.Services
                 return;
             }
 
-            var rawPaths = new List<List<Point2D>>();
+            detail.InitializeBounds();
+
+            var closedLoops = new List<List<Point2D>>();
+            var openChains = new List<List<Point2D>>();
+
             foreach (var figure in detail.Figures)
             {
                 var path = BuildPathFromFigure(figure);
-                if (path.Count >= 2)
-                {
-                    rawPaths.Add(path);
-                }
-            }
+                path = NormalizePath(path);
 
-            if (rawPaths.Count == 0)
-            {
-                BuildRectangleGeometry(detail);
-                return;
-            }
-
-            var closedLoops = new List<List<Point2D>>();
-            var openPaths = new List<List<Point2D>>();
-
-            foreach (var path in rawPaths)
-            {
-                var normalized = NormalizePath(path);
-                if (normalized.Count < 2)
+                if (path.Count < 2)
                 {
                     continue;
                 }
 
-                if (IsClosed(normalized))
+                if (IsClosed(path))
                 {
-                    closedLoops.Add(CloseLoop(normalized));
+                    closedLoops.Add(CloseLoop(path));
                 }
                 else
                 {
-                    openPaths.Add(normalized);
+                    openChains.Add(path);
                 }
             }
 
-            MergeOpenPaths(openPaths, closedLoops);
+            StitchOpenChains(openChains, closedLoops);
+
+            if (openChains.Count > 0)
+            {
+                throw BuildContourException(detail, openChains, closedLoops, "Unclosed chains remained after stitching.");
+            }
+
+            closedLoops = closedLoops
+                .Select(NormalizePath)
+                .Select(CloseLoop)
+                .Where(loop => loop.Count >= 4 && Math.Abs(SignedArea(loop)) > 0.01f)
+                .ToList();
 
             if (closedLoops.Count == 0)
             {
-                BuildRectangleGeometry(detail);
-                return;
+                throw BuildContourException(detail, openChains, closedLoops, "No closed loops were built from DXF figures.");
             }
 
-            var loops = closedLoops
-                .Select(CloseLoop)
-                .Where(x => x.Count >= 4)
-                .ToList();
+            var allLoopPoints = closedLoops.SelectMany(x => x).ToList();
+            var minX = allLoopPoints.Min(p => p.X);
+            var minY = allLoopPoints.Min(p => p.Y);
 
-            if (loops.Count == 0)
-            {
-                BuildRectangleGeometry(detail);
-                return;
-            }
-
-            var allPoints = loops.SelectMany(x => x).ToList();
-            var minX = allPoints.Min(p => p.X);
-            var minY = allPoints.Min(p => p.Y);
-
-            var shiftedLoops = loops
+            var shiftedLoops = closedLoops
                 .Select(loop => loop.Select(p => new Point2D(p.X - minX, p.Y - minY)).ToList())
                 .ToList();
 
             var loopInfos = shiftedLoops
                 .Select(loop => new LoopInfo
                 {
-                    Points = loop,
-                    Area = SignedArea(loop),
+                    Points = EnsureCounterClockwiseForOuter(loop),
+                    SignedArea = SignedArea(loop),
                     AbsArea = Math.Abs(SignedArea(loop)),
                     Centroid = PolygonCentroid(loop)
                 })
@@ -119,12 +107,17 @@ namespace vega.Services
 
                 if (depth % 2 == 0)
                 {
-                    contour.FilledContours.Add(current.Points);
+                    contour.FilledContours.Add(CloseLoop(current.Points));
                 }
                 else
                 {
-                    contour.HoleContours.Add(current.Points);
+                    contour.HoleContours.Add(CloseLoop(EnsureClockwiseForHole(current.Points)));
                 }
+            }
+
+            if (contour.FilledContours.Count == 0)
+            {
+                throw BuildContourException(detail, openChains, closedLoops, "Only holes were detected. Outer contour is missing.");
             }
 
             var contourPoints = contour.GetAllPoints().ToList();
@@ -147,6 +140,18 @@ namespace vega.Services
             detail.RotatedHeight = Math.Max(1, (int)Math.Ceiling(detail.RotatedContour.GetHeight()));
             detail.Width = detail.OriginalWidth;
             detail.Height = detail.OriginalHeight;
+        }
+
+        private static InvalidOperationException BuildContourException(
+            Detail2D detail,
+            List<List<Point2D>> openChains,
+            List<List<Point2D>> closedLoops,
+            string reason)
+        {
+            var detailName = string.IsNullOrWhiteSpace(detail.Name) ? "(without name)" : detail.Name;
+            return new InvalidOperationException(
+                $"Failed to build closed contour for detail '{detailName}'. {reason} " +
+                $"Figures={detail.Figures.Count}, ClosedLoops={closedLoops.Count}, OpenChains={openChains.Count}.");
         }
 
         private static void BuildRectangleGeometry(Detail2D detail)
@@ -223,7 +228,7 @@ namespace vega.Services
             var cx = coords[0];
             var cy = coords[1];
             var r = coords[2];
-            var segments = Math.Max(32, (int)Math.Ceiling(2 * Math.PI * r / 5f));
+            var segments = Math.Max(48, (int)Math.Ceiling(2 * Math.PI * r / 4f));
 
             var result = new List<Point2D>();
             for (var i = 0; i <= segments; i++)
@@ -250,13 +255,14 @@ namespace vega.Services
             var r = coords[2];
             var start = NormalizeAngle(coords[3]);
             var end = NormalizeAngle(coords[4]);
+
             var sweep = end - start;
             if (sweep <= 0)
             {
                 sweep += 360f;
             }
 
-            var segments = Math.Max(8, (int)Math.Ceiling(sweep / 10f));
+            var segments = Math.Max(12, (int)Math.Ceiling(sweep / 5f));
             var result = new List<Point2D>();
 
             for (var i = 0; i <= segments; i++)
@@ -293,79 +299,82 @@ namespace vega.Services
             return result;
         }
 
-        private static void MergeOpenPaths(List<List<Point2D>> openPaths, List<List<Point2D>> closedLoops)
+        private static void StitchOpenChains(List<List<Point2D>> openChains, List<List<Point2D>> closedLoops)
         {
-            var changed = true;
+            var progress = true;
 
-            while (changed)
+            while (progress)
             {
-                changed = false;
+                progress = false;
 
-                for (var i = 0; i < openPaths.Count; i++)
+                for (var i = 0; i < openChains.Count; i++)
                 {
-                    var first = openPaths[i];
-                    if (IsClosed(first))
+                    openChains[i] = NormalizePath(openChains[i]);
+
+                    if (IsClosed(openChains[i]))
                     {
-                        closedLoops.Add(CloseLoop(first));
-                        openPaths.RemoveAt(i);
-                        changed = true;
-                        break;
+                        closedLoops.Add(CloseLoop(openChains[i]));
+                        openChains.RemoveAt(i);
+                        progress = true;
+                        i--;
+                        continue;
                     }
 
-                    for (var j = i + 1; j < openPaths.Count; j++)
+                    for (var j = i + 1; j < openChains.Count; j++)
                     {
-                        var second = openPaths[j];
-                        if (!TryMerge(first, second, out var merged))
+                        if (!TryJoinChains(openChains[i], openChains[j], out var merged))
                         {
                             continue;
                         }
 
-                        openPaths[i] = merged;
-                        openPaths.RemoveAt(j);
-                        changed = true;
-                        break;
-                    }
-
-                    if (changed)
-                    {
+                        openChains[i] = NormalizePath(merged);
+                        openChains.RemoveAt(j);
+                        progress = true;
                         break;
                     }
                 }
             }
 
-            for (var i = openPaths.Count - 1; i >= 0; i--)
+            for (var i = openChains.Count - 1; i >= 0; i--)
             {
-                if (IsClosed(openPaths[i]))
+                openChains[i] = NormalizePath(openChains[i]);
+
+                if (IsClosed(openChains[i]))
                 {
-                    closedLoops.Add(CloseLoop(openPaths[i]));
-                    openPaths.RemoveAt(i);
+                    closedLoops.Add(CloseLoop(openChains[i]));
+                    openChains.RemoveAt(i);
                 }
             }
         }
 
-        private static bool TryMerge(List<Point2D> a, List<Point2D> b, out List<Point2D> merged)
+        private static bool TryJoinChains(List<Point2D> a, List<Point2D> b, out List<Point2D> merged)
         {
             merged = new List<Point2D>();
 
-            if (Distance(a[^1], b[0]) <= JoinTolerance)
+            var aStart = a[0];
+            var aEnd = a[^1];
+            var bStart = b[0];
+            var bEnd = b[^1];
+
+            if (Distance(aEnd, bStart) <= EndpointTolerance)
             {
                 merged = a.Concat(b.Skip(1)).ToList();
                 return true;
             }
 
-            if (Distance(a[^1], b[^1]) <= JoinTolerance)
+            if (Distance(aEnd, bEnd) <= EndpointTolerance)
             {
                 merged = a.Concat(b.Take(b.Count - 1).Reverse()).ToList();
                 return true;
             }
 
-            if (Distance(a[0], b[^1]) <= JoinTolerance)
+            if (Distance(aStart, bEnd) <= EndpointTolerance)
             {
                 merged = b.Concat(a.Skip(1)).ToList();
                 return true;
             }
 
-            if (Distance(a[0], b[0]) <= JoinTolerance)
+            if (Distance(aStart, bStart) <= EndpointTolerance)
             {
                 merged = b.AsEnumerable().Reverse().Concat(a.Skip(1)).ToList();
                 return true;
@@ -424,9 +433,10 @@ namespace vega.Services
         private static List<Point2D> NormalizePath(List<Point2D> path)
         {
             var result = new List<Point2D>();
+
             foreach (var point in path)
             {
-                if (result.Count == 0 || Distance(result[^1], point) > 0.001f)
+                if (result.Count == 0 || Distance(result[^1], point) > DuplicatePointTolerance)
                 {
                     result.Add(point);
                 }
@@ -437,7 +447,7 @@ namespace vega.Services
 
         private static bool IsClosed(List<Point2D> path)
         {
-            return path.Count >= 3 && Distance(path[0], path[^1]) <= JoinTolerance;
+            return path.Count >= 3 && Distance(path[0], path[^1]) <= EndpointTolerance;
         }
 
         private static List<Point2D> CloseLoop(List<Point2D> path)
@@ -448,7 +458,7 @@ namespace vega.Services
                 return result;
             }
 
-            if (Distance(result[0], result[^1]) > JoinTolerance)
+            if (Distance(result[0], result[^1]) > EndpointTolerance)
             {
                 result.Add(result[0]);
             }
@@ -458,6 +468,16 @@ namespace vega.Services
             }
 
             return result;
+        }
+
+        private static List<Point2D> EnsureCounterClockwiseForOuter(List<Point2D> loop)
+        {
+            return SignedArea(loop) >= 0 ? loop : loop.AsEnumerable().Reverse().ToList();
+        }
+
+        private static List<Point2D> EnsureClockwiseForHole(List<Point2D> loop)
+        {
+            return SignedArea(loop) <= 0 ? loop : loop.AsEnumerable().Reverse().ToList();
         }
 
         private static float SignedArea(List<Point2D> polygon)
@@ -491,6 +511,7 @@ namespace vega.Services
 
             double cx = 0;
             double cy = 0;
+
             for (var i = 0; i < polygon.Count - 1; i++)
             {
                 var factor = polygon[i].X * polygon[i + 1].Y - polygon[i + 1].X * polygon[i].Y;
@@ -505,6 +526,7 @@ namespace vega.Services
         private static bool PointInPolygon(Point2D point, List<Point2D> polygon)
         {
             var inside = false;
+
             for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
             {
                 var xi = polygon[i].X;
@@ -514,6 +536,7 @@ namespace vega.Services
 
                 var intersect = ((yi > point.Y) != (yj > point.Y))
                                 && (point.X < (xj - xi) * (point.Y - yi) / ((yj - yi) == 0 ? 0.000001f : (yj - yi)) + xi);
+
                 if (intersect)
                 {
                     inside = !inside;
@@ -538,7 +561,7 @@ namespace vega.Services
         private sealed class LoopInfo
         {
             public List<Point2D> Points { get; set; } = new();
-            public float Area { get; set; }
+            public float SignedArea { get; set; }
             public float AbsArea { get; set; }
             public Point2D Centroid { get; set; }
         }
