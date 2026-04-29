@@ -4,5 +4,223 @@
         <name>vega</name>
     </assembly>
     <members>
+        <member name="M:vega.Controllers.AuthController.GetTokens(vega.Controllers.DTO.AuthDTO)">
+            <summary>
+            Authorizes user in system.
+            </summary>
+            <returns>Returns JWT</returns>
+            <response code="200">Returns JWT access and refresh</response>
+            <response code="400">If user is not registered in system or password is wrong</response>
+        </member>
+        <member name="M:vega.Controllers.AuthController.DestroySessionTokens">
+            <summary>
+            Deactivates user's access-token and logs out user from system.
+            </summary>
+            <returns>User name</returns>
+            <response code="200">Logout user succefully</response>
+        </member>
+        <member name="M:vega.Controllers.AuthController.GetUserIdentity">
+            <summary>
+            Retrieves logged in user information.
+            </summary>
+            <returns>User name</returns>
+            <response code="200">Returns user info</response>
+            <response code="401">Not authorized</response>
+        </member>
+        <member name="M:vega.Controllers.AuthController.RefreshAccessToken(System.String)">
+            <summary>
+            Refreshes user access token via refresh token.
+            </summary>
+            <returns>Returns JWT</returns>
+            <response code="200">Returns JWT access and refresh</response>
+            <response code="403">Refresh has expired or not associated with user's access</response>
+        </member>
+        <member name="M:vega.Controllers.CuttingController.Calculate1DCutting(vega.Controllers.DTO.Calculate1DDTO)">
+            <summary>
+            Method for calculating optimal 1d cutting.
+            </summary>
+            <param name="dto"></param>
+            <returns>Returns the calculated model</returns>
+            <response code="200">Calculeted is ok</response>
+            <response code="500">Detail length > workpiece length</response>
+        </member>
+        <member name="M:vega.Controllers.CuttingController.Calculate2DCutting(vega.Controllers.DTO.Calculate2DDTO)">
+            <summary>
+            Method for calculating optimal 2d cutting.
+            </summary>
+            <param name="dto"></param>
+            <returns>Returns the calculated model</returns>
+            <response code="200">Calculeted is ok</response>
+            <response code="500">Detail length > workpiece length</response>
+        </member>
+        <member name="M:vega.Controllers.CuttingController.Calculate2DCuttingWithDXF(vega.Controllers.DTO.Calculate2DDXFDTO)">
+            <summary>
+            Method for calculating optimal 2d cutting with dxf
+            </summary>
+            <param name="dto"></param>
+            <returns>Returns the calculated model</returns>
+            <response code="200">Calculeted is ok</response>
+            <response code="500">Detail length > workpiece length</response>
+        </member>
+        <member name="M:vega.Controllers.DetailController.GetDetails">
+            <summary>
+            Get all details
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:vega.Controllers.DetailController.GetDesignations">
+            <summary>
+            Get details' designations
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:vega.Controllers.DetailController.CreateDetail(vega.Controllers.DTO.DetailDTO)">
+            <summary>
+            Create new detail and generate png file
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:vega.Controllers.DetailController.DeleteDetails(vega.Controllers.DTO.DeleteDetailDTO)">
+            <summary>
+            Delete Details by id
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:vega.Controllers.DetailController.GetMaterials">
+            <summary>
+            Get all materials
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:vega.Controllers.DetailController.CreateWorkpiece(vega.Controllers.DTO.WorkpieceDTO)">
+            <summary>
+            Create new workpiece
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:vega.Controllers.DetailController.GetWorkpieces">
+            <summary>
+            Get all workpieces
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:vega.Controllers.FileController.ImportCsv1D(Microsoft.AspNetCore.Http.IFormFile)">
+            <summary>
+            1D import csv file and formating him in json
+            </summary>
+            <param name="file"></param>
+            <returns>JSON file with details length and count</returns>
+            <response code="200">Formatting is ok</response>
+            <response code="400">Input file is null or Invalid file type. Please upload a CSV file</response>
+        </member>
+        <member name="M:vega.Controllers.FileController.ExportCsv1D(System.Collections.Generic.List{vega.Controllers.DTO.Detail1DDTO})">
+            <summary>
+            1D formating json to csv and export csv file
+            </summary>
+            <param name="file"></param>
+            <returns>JSON file with details length and count</returns>
+            <response code="200">Export is ok</response>
+            <response code="400">Details count = 0</response>
+        </member>
+        <member name="M:vega.Controllers.FileController.ExportPng(vega.Models.Cutting1DResult)">
+            <summary>
+            draw png scheme 1d cutting caltulating
+            </summary>
+            <returns>png scheme cutting</returns>
+        </member>
+        <member name="M:vega.Controllers.FileController.ExportPdf(vega.Models.Cutting1DResult)">
+            <summary>
+            download pdf scheme 1d cutting calculating
+            </summary>
+            <returns>pdf file</returns>
+        </member>
+        <member name="M:vega.Controllers.FileController.ExportResultCSV(vega.Models.Cutting1DResult)">
+            <summary>
+            download csv file result 1d cutting calculating
+            </summary>
+            <returns>pdf file</returns>
+        </member>
+        <member name="M:vega.Controllers.FileController.ImportCsv2D(Microsoft.AspNetCore.Http.IFormFile)">
+            <summary>
+            2D import csv file and formating him in json
+            </summary>
+            <param name="file"></param>
+            <returns>JSON file with details length and count</returns>
+            <response code="200">Formatting is ok</response>
+            <response code="400">Input file is null or Invalid file type. Please upload a CSV file</response>
+        </member>
+        <member name="M:vega.Controllers.FileController.ExportCsv2D(System.Collections.Generic.List{vega.Controllers.DTO.Detail2DDTO})">
+            <summary>
+            2D formating json to csv and export csv file
+            </summary>
+            <param name="file"></param>
+            <returns>JSON file with details length and count</returns>
+            <response code="200">Export is ok</response>
+            <response code="400">Details count = 0</response>
+        </member>
+        <member name="M:vega.Controllers.FileController.ExportPng(vega.Models.Cutting2DResult)">
+            <summary>
+            draw png scheme 2d cutting caltulating
+            </summary>
+            <returns>png scheme cutting</returns>
+        </member>
+        <member name="M:vega.Controllers.FileController.ExportDxf(vega.Models.Cutting2DResult)">
+            <summary>
+            draw dxf 2d cutting caltulating
+            </summary>
+            <returns>png scheme cutting</returns>
+        </member>
+        <member name="M:vega.Controllers.FileController.Export2DPdf(vega.Models.Cutting2DResult)">
+            <summary>
+            download pdf scheme 2d cutting calculating
+            </summary>
+            <returns>pdf file</returns>
+        </member>
+        <member name="M:vega.Controllers.FileController.ExportDXFPng(vega.Models.Cutting2DResult)">
+            <summary>
+            draw png scheme dxf cutting caltulating
+            </summary>
+            <returns>png scheme cutting</returns>
+        </member>
+        <member name="M:vega.Controllers.FileController.ExportDxfPdf(vega.Models.Cutting2DResult)">
+            <summary>
+            download pdf scheme dxf cutting calculating
+            </summary>
+            <returns>pdf file</returns>
+        </member>
+        <member name="M:vega.Controllers.FileController.ExportDxfFile(vega.Models.Cutting2DResult)">
+            <summary>
+            draw dxf file for dxf cutting caltulating
+            </summary>
+            <returns>png scheme cutting</returns>
+        </member>
+        <member name="M:vega.Controllers.FileController.ImportCsvDXF(Microsoft.AspNetCore.Http.IFormFile)">
+            <summary>
+            DXF import csv file and formating him in json
+            </summary>
+            <param name="file"></param>
+            <returns>JSON file with details ids and count</returns>
+        </member>
+        <member name="M:vega.Controllers.FileController.ExportCsvDXF(System.Collections.Generic.List{vega.Controllers.DTO.DetailDxfDTO})">
+            <summary>
+            DXF formating json to csv and export csv file
+            </summary>
+            <param name="file"></param>
+            <returns>JSON file with details id  and count</returns>
+            <response code="200">Export is ok</response>
+            <response code="400">Details count = 0</response>
+        </member>
+        <member name="T:vega.Migrations.Initial">
+            <inheritdoc />
+        </member>
+        <member name="M:vega.Migrations.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:vega.Migrations.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:vega.Migrations.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
     </members>
 </doc>
