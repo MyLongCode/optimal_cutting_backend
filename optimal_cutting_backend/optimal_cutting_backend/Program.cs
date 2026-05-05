@@ -75,18 +75,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnTokenValidated = (TokenValidatedContext context) =>
             {
-                var tokenManager = context.HttpContext.RequestServices.GetService<ITokenManagerService>();
-                if (tokenManager != null && !tokenManager.IsTokenValid())
-                {
-                    context.Fail("Failed additional validation");
-                }
 
                 return Task.CompletedTask;
             }
         };
     });
-
-builder.Services.AddScoped<ITokenManagerService, TokenManagerService>();
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 builder.Services.AddScoped<ICSVService, CSVService>();
 builder.Services.AddScoped<ICutting1DService, Cutting1DService>();

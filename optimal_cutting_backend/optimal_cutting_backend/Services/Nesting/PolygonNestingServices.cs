@@ -88,7 +88,7 @@ public class NfpService : INfpService
     }
 
     private static PathD ToPathD(Coordinate[] coords)
-        => new(coords.Take(coords.Length - 1).Select(c => new PointD(c.X, c.Y)));
+            => new(coords.Take(coords.Length - 1).Select(c => new PointD(c.X, c.Y)));
 
     private static PathD ReflectAroundOrigin(Coordinate[] coords)
         => new(coords.Take(coords.Length - 1).Select(c => new PointD(-c.X, -c.Y)));
