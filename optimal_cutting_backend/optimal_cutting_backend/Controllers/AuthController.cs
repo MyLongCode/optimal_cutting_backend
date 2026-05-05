@@ -15,15 +15,12 @@ namespace vega.Controllers
     public class AuthController : Controller
     {
         private readonly ILogger<AuthController> _logger;
-        private readonly ITokenManagerService _tokenManager;
         private readonly IHttpContextAccessor _context;
         private readonly VegaContext _db;
 
-        public AuthController(ILogger<AuthController> logger,
-            ITokenManagerService tokenManager, IHttpContextAccessor httpContext, VegaContext dbContext)
+        public AuthController(ILogger<AuthController> logger, IHttpContextAccessor httpContext, VegaContext dbContext)
         {
             _logger = logger;
-            _tokenManager = tokenManager;
             _context = httpContext;
             _db = dbContext;
         }
@@ -48,12 +45,8 @@ namespace vega.Controllers
             genericIdentity.AddClaim(new Claim(ClaimTypes.Sid, user.Id.ToString()));
             genericIdentity.AddClaim(new Claim("login", user.Login));
             var identity = new ClaimsIdentity(genericIdentity);
-            var tokens = _tokenManager.GetTokens(identity);
 
-            return Ok(new AuthResponseDTO() {
-                Refresh = tokens.refresh,
-                Access = tokens.access}
-            );
+            return Ok();
         }
 
         /// <summary>
@@ -66,7 +59,6 @@ namespace vega.Controllers
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         public IActionResult DestroySessionTokens()
         {
-            _tokenManager.DestroySessionToken();
             return Ok();   
         }
 
@@ -100,13 +92,6 @@ namespace vega.Controllers
         [Route("refresh-token")]
         public IActionResult RefreshAccessToken([FromForm] string refreshToken)
         {
-            if(_tokenManager.RefreshToken(out var accessToken, refreshToken))
-            {
-                return Ok(new AuthResponseDTO() {
-                    Refresh = refreshToken,
-                    Access = accessToken}
-                    );
-            }
 
             return Forbid();
         }
