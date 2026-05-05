@@ -19,13 +19,15 @@ namespace vega.Controllers
         private readonly ICutting2DService _cutting2DService;
         private readonly VegaContext _db;
         private readonly IPolygonNestingService _polygonNestingService;
+        private readonly IContourBuilderService _contourBuilderService;
 
-        public CuttingController(ICutting1DService cutting1DService, ICutting2DService cutting2DService, VegaContext db, IPolygonNestingService polygonNestingService)
+        public CuttingController(ICutting1DService cutting1DService, ICutting2DService cutting2DService, VegaContext db, IPolygonNestingService polygonNestingService, IContourBuilderService contourBuilderService)
         {
             _db = db;
             _cutting1DService = cutting1DService;
             _cutting2DService = cutting2DService;
             _polygonNestingService = polygonNestingService;
+            _contourBuilderService = contourBuilderService;
         }
 
         /// <summary>
@@ -145,6 +147,81 @@ namespace vega.Controllers
         {
             var res = _polygonNestingService.Nest(dto);
             return Ok(res);
+        }
+
+        [HttpPost]
+        [Route("cutting2d/nesting/from-db")]
+        public ActionResult CalculatePolygonNestingFromDb([FromBody] Cutting2DNestingFromDbDTO dto)
+        {
+            if (dto.DetailIds.Count == 0) return BadRequest("detailIds is empty");
+
+            var groupedIds = dto.DetailIds.GroupBy(x => x).ToDictionary(g => g.Key, g => g.Count());
+            var files = _db.Filenames
+                .Include(f => f.Figures)
+                .Where(f => groupedIds.Keys.Contains(f.Id))
+                .ToList();
+
+            if (files.Count == 0) return BadRequest("details not found");
+
+            var parts = new List<NestingPartDto>();
+            foreach (var file in files)
+            {
+                var detail = new Detail2D(file.Figures, file.Designation);
+                _contourBuilderService.BuildGeometry(detail);
+                if (detail.Contour == null || detail.Contour.FilledContours.Count == 0) continue;
+
+                var orderedFilled = detail.Contour.FilledContours
+                    .OrderByDescending(GetPolygonAbsArea)
+                    .ToList();
+                var outerLoop = orderedFilled.First();
+                var innerFilledAsHoles = orderedFilled.Skip(1).ToList();
+                var allHoles = innerFilledAsHoles.Concat(detail.Contour.HoleContours).ToList();
+
+                parts.Add(new NestingPartDto
+                {
+                    Id = file.Id.ToString(),
+                    Quantity = groupedIds[file.Id],
+                    Outer = new List<List<NestingPointDto>>
+                    {
+                        outerLoop.Select(p => new NestingPointDto { X = p.X, Y = p.Y }).ToList()
+                    },
+                    Holes = allHoles
+                        .Select(loop => new List<List<NestingPointDto>>
+                        {
+                            loop.Select(p => new NestingPointDto { X = p.X, Y = p.Y }).ToList()
+                        })
+                        .ToList()
+                });
+            }
+
+            if (parts.Count == 0) return BadRequest("cannot build contours from details");
+
+            var nestingDto = new Cutting2DNestingDTO
+            {
+                Sheets = dto.Sheets,
+                Parts = parts,
+                Kerf = dto.Kerf,
+                Clearance = dto.Clearance,
+                Scale = dto.Scale,
+                EnableLocalSearch = dto.EnableLocalSearch,
+                AllowedRotationsDegrees = dto.AllowedRotationsDegrees
+            };
+
+            var res = _polygonNestingService.Nest(nestingDto);
+            return Ok(res);
+        }
+
+        private static double GetPolygonAbsArea(List<Point2D> loop)
+        {
+            if (loop.Count < 3) return 0;
+            double area = 0;
+            for (var i = 0; i < loop.Count; i++)
+            {
+                var a = loop[i];
+                var b = loop[(i + 1) % loop.Count];
+                area += (a.X * b.Y) - (b.X * a.Y);
+            }
+            return Math.Abs(area) * 0.5;
         }
 
     }

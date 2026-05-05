@@ -22,12 +22,12 @@ public interface INfpService
 
 public interface IPlacementCandidateGenerator
 {
-    IEnumerable<Coordinate> GenerateCandidates(Geometry innerNfp);
+    IEnumerable<Coordinate> GenerateCandidates(Geometry innerNfp, IEnumerable<Geometry>? forbidden = null);
 }
 
 public interface INestingSolver
 {
-    NestingResult Solve(List<NormalizedPolygon> sheets, List<NormalizedPolygon> parts, double kerf, double clearance, bool localSearch);
+    NestingResult Solve(List<NormalizedPolygon> sheets, List<NormalizedPolygon> parts, double kerf, double clearance, bool localSearch, IReadOnlyList<int>? rotations = null);
 }
 
 public interface IPolygonNestingService

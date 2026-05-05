@@ -10,6 +10,7 @@ public class NestingPlacement
     public required string SheetId { get; set; }
     public double X { get; set; }
     public double Y { get; set; }
+    public int Rotation { get; set; }
     public Geometry? TransformedGeometry { get; set; }
 }
 
