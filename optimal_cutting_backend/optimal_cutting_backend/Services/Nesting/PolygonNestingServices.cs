@@ -88,7 +88,7 @@ public class NfpService : INfpService
     }
 
     private static PathD ToPathD(Coordinate[] coords)
-            => new(coords.Take(coords.Length - 1).Select(c => new PointD(c.X, c.Y)));
+        => new(coords.Take(coords.Length - 1).Select(c => new PointD(c.X, c.Y)));
 
     private static PathD ReflectAroundOrigin(Coordinate[] coords)
         => new(coords.Take(coords.Length - 1).Select(c => new PointD(-c.X, -c.Y)));
@@ -146,7 +146,11 @@ public class NestingSolver : INestingSolver
                     var anchorNormalized = Translate(rotated, -anchor.X, -anchor.Y);
                     var inner = _nfp.BuildInnerNfp(sheet.Polygon, (Polygon)anchorNormalized, gap);
                     var forbiddens = placedBySheet[sheet.Id].Select(p => _nfp.BuildOuterNfp((Polygon)p, (Polygon)anchorNormalized, gap)).ToList();
-                    var candidates = _candidates.GenerateCandidates(inner, forbiddens);
+                    var candidates = _candidates.GenerateCandidates(inner, forbiddens).ToList();
+                    if (candidates.Count == 0)
+                    {
+                        candidates = BuildFallbackCandidates(sheet.Polygon).ToList();
+                    }
 
                     NestingPlacement? best = null;
                     foreach (var c in candidates)
@@ -216,6 +220,22 @@ public class NestingSolver : INestingSolver
         if (Math.Abs(cArea - pArea) > 1e-6) return cArea < pArea;
         if (Math.Abs(ce.MinY - pe.MinY) > 1e-6) return ce.MinY < pe.MinY;
         return ce.MinX < pe.MinX;
+    }
+
+    private static IEnumerable<Coordinate> BuildFallbackCandidates(Polygon sheet)
+    {
+        var coords = new List<Coordinate>();
+        coords.AddRange(sheet.ExteriorRing.Coordinates);
+        for (var i = 0; i < sheet.NumInteriorRings; i++) coords.AddRange(sheet.GetInteriorRingN(i).Coordinates);
+        var env = sheet.EnvelopeInternal;
+        coords.Add(new Coordinate(env.MinX, env.MinY));
+        coords.Add(new Coordinate(env.MinX, env.MaxY));
+        coords.Add(new Coordinate(env.MaxX, env.MinY));
+        coords.Add(new Coordinate(env.MaxX, env.MaxY));
+        return coords
+            .OrderBy(c => c.Y)
+            .ThenBy(c => c.X)
+            .DistinctBy(c => $"{Math.Round(c.X, 6)}:{Math.Round(c.Y, 6)}");
     }
 }
 

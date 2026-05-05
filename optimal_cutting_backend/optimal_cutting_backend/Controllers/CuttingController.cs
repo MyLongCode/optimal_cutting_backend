@@ -170,14 +170,22 @@ namespace vega.Controllers
                 _contourBuilderService.BuildGeometry(detail);
                 if (detail.Contour == null || detail.Contour.FilledContours.Count == 0) continue;
 
+                var orderedFilled = detail.Contour.FilledContours
+                    .OrderByDescending(GetPolygonAbsArea)
+                    .ToList();
+                var outerLoop = orderedFilled.First();
+                var innerFilledAsHoles = orderedFilled.Skip(1).ToList();
+                var allHoles = innerFilledAsHoles.Concat(detail.Contour.HoleContours).ToList();
+
                 parts.Add(new NestingPartDto
                 {
                     Id = file.Id.ToString(),
                     Quantity = groupedIds[file.Id],
-                    Outer = detail.Contour.FilledContours
-                        .Select(loop => loop.Select(p => new NestingPointDto { X = p.X, Y = p.Y }).ToList())
-                        .ToList(),
-                    Holes = detail.Contour.HoleContours
+                    Outer = new List<List<NestingPointDto>>
+                    {
+                        outerLoop.Select(p => new NestingPointDto { X = p.X, Y = p.Y }).ToList()
+                    },
+                    Holes = allHoles
                         .Select(loop => new List<List<NestingPointDto>>
                         {
                             loop.Select(p => new NestingPointDto { X = p.X, Y = p.Y }).ToList()
@@ -201,6 +209,19 @@ namespace vega.Controllers
 
             var res = _polygonNestingService.Nest(nestingDto);
             return Ok(res);
+        }
+
+        private static double GetPolygonAbsArea(List<Point2D> loop)
+        {
+            if (loop.Count < 3) return 0;
+            double area = 0;
+            for (var i = 0; i < loop.Count; i++)
+            {
+                var a = loop[i];
+                var b = loop[(i + 1) % loop.Count];
+                area += (a.X * b.Y) - (b.X * a.Y);
+            }
+            return Math.Abs(area) * 0.5;
         }
 
     }
