@@ -126,6 +126,17 @@ public class NestingSolver : INestingSolver
 {
     private readonly INfpService _nfp;
     private readonly IPlacementCandidateGenerator _candidates;
+
+    private readonly record struct PlacementScore(
+        double OccupiedArea,
+        double OccupiedMaxY,
+        double OccupiedMaxX,
+        bool FitsInsideOccupiedEnvelope,
+        double ExpansionArea,
+        double PartMaxY,
+        double PartMinY,
+        double PartMinX);
+
     public NestingSolver(INfpService nfp, IPlacementCandidateGenerator candidates) { _nfp = nfp; _candidates = candidates; }
 
     public NestingResult Solve(List<NormalizedPolygon> sheets, List<NormalizedPolygon> parts, double kerf, double clearance, bool localSearch, IReadOnlyList<int>? rotations = null)
@@ -141,6 +152,7 @@ public class NestingSolver : INestingSolver
         foreach (var part in parts.OrderByDescending(p => p.Polygon.Area))
         {
             NestingPlacement? bestAcrossSheets = null;
+            PlacementScore? bestScore = null;
 
             foreach (var sheet in sheets)
             {
@@ -164,9 +176,13 @@ public class NestingSolver : INestingSolver
                     {
                         var moved = Translate(anchorNormalized, c.X, c.Y);
                         if (!IsValidPlacement(sheet.Polygon, moved, placedBySheet[sheet.Id], gap)) continue;
+
+                        var currentScore = ScorePlacement(moved, placedBySheet[sheet.Id]);
                         var placement = new NestingPlacement { PartId = part.Id, SheetId = sheet.Id, X = c.X, Y = c.Y, Rotation = angle, TransformedGeometry = moved };
-                        if (bestAcrossSheets == null || IsBetterPlacement(placement, bestAcrossSheets))
+
+                        if (bestAcrossSheets == null || bestScore == null || IsBetterPlacement(placement, currentScore, bestAcrossSheets, bestScore.Value))
                         {
+                            bestScore = currentScore;
                             bestAcrossSheets = placement;
                         }
                     }
@@ -223,20 +239,75 @@ public class NestingSolver : INestingSolver
         return true;
     }
 
-    private static bool IsBetterPlacement(NestingPlacement current, NestingPlacement previous)
+    private static bool IsBetterPlacement(NestingPlacement current, PlacementScore currentScore, NestingPlacement previous, PlacementScore previousScore)
     {
         if (current.SheetId != previous.SheetId) return string.CompareOrdinal(current.SheetId, previous.SheetId) < 0;
-        return IsBetter(current.TransformedGeometry!, previous.TransformedGeometry!);
+        return IsBetterScore(currentScore, previousScore);
     }
 
-    private static bool IsBetter(Geometry current, Geometry previous)
+    private static PlacementScore ScorePlacement(Geometry moved, List<Geometry> placed)
     {
-        var ce = current.EnvelopeInternal; var pe = previous.EnvelopeInternal;
-        var cArea = ce.Width * ce.Height;
-        var pArea = pe.Width * pe.Height;
-        if (Math.Abs(cArea - pArea) > 1e-6) return cArea < pArea;
-        if (Math.Abs(ce.MinY - pe.MinY) > 1e-6) return ce.MinY < pe.MinY;
-        return ce.MinX < pe.MinX;
+        const double eps = 1e-6;
+
+        var movedEnv = moved.EnvelopeInternal;
+        var occupied = new Envelope(movedEnv.MinX, movedEnv.MaxX, movedEnv.MinY, movedEnv.MaxY);
+        Envelope? previousOccupied = null;
+
+        if (placed.Count > 0)
+        {
+            previousOccupied = new Envelope(placed[0].EnvelopeInternal);
+            for (var i = 1; i < placed.Count; i++)
+            {
+                previousOccupied.ExpandToInclude(placed[i].EnvelopeInternal);
+            }
+
+            occupied = new Envelope(previousOccupied);
+            occupied.ExpandToInclude(movedEnv);
+        }
+
+        var previousArea = previousOccupied == null ? 0 : previousOccupied.Width * previousOccupied.Height;
+        var occupiedArea = occupied.Width * occupied.Height;
+        var fitsInsideOccupiedEnvelope = previousOccupied != null
+            && movedEnv.MinX >= previousOccupied.MinX - eps
+            && movedEnv.MaxX <= previousOccupied.MaxX + eps
+            && movedEnv.MinY >= previousOccupied.MinY - eps
+            && movedEnv.MaxY <= previousOccupied.MaxY + eps;
+
+        return new PlacementScore(
+            OccupiedArea: occupiedArea,
+            OccupiedMaxY: occupied.MaxY,
+            OccupiedMaxX: occupied.MaxX,
+            FitsInsideOccupiedEnvelope: fitsInsideOccupiedEnvelope,
+            ExpansionArea: Math.Max(0, occupiedArea - previousArea),
+            PartMaxY: movedEnv.MaxY,
+            PartMinY: movedEnv.MinY,
+            PartMinX: movedEnv.MinX);
+    }
+
+    private static bool IsBetterScore(PlacementScore current, PlacementScore previous)
+    {
+        const double eps = 1e-6;
+
+        if (Math.Abs(current.OccupiedArea - previous.OccupiedArea) > eps) return current.OccupiedArea < previous.OccupiedArea;
+
+        if (current.FitsInsideOccupiedEnvelope != previous.FitsInsideOccupiedEnvelope)
+        {
+            return current.FitsInsideOccupiedEnvelope;
+        }
+
+        if (Math.Abs(current.OccupiedMaxY - previous.OccupiedMaxY) > eps) return current.OccupiedMaxY < previous.OccupiedMaxY;
+        if (Math.Abs(current.OccupiedMaxX - previous.OccupiedMaxX) > eps) return current.OccupiedMaxX < previous.OccupiedMaxX;
+
+        if (current.FitsInsideOccupiedEnvelope && previous.FitsInsideOccupiedEnvelope)
+        {
+            if (Math.Abs(current.PartMaxY - previous.PartMaxY) > eps) return current.PartMaxY > previous.PartMaxY;
+            if (Math.Abs(current.PartMinX - previous.PartMinX) > eps) return current.PartMinX < previous.PartMinX;
+            return current.PartMinY < previous.PartMinY;
+        }
+
+        if (Math.Abs(current.ExpansionArea - previous.ExpansionArea) > eps) return current.ExpansionArea < previous.ExpansionArea;
+        if (Math.Abs(current.PartMinY - previous.PartMinY) > eps) return current.PartMinY < previous.PartMinY;
+        return current.PartMinX < previous.PartMinX;
     }
 
     private static IEnumerable<Coordinate> BuildFallbackCandidates(Polygon sheet)

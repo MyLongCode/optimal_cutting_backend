@@ -101,8 +101,7 @@ namespace vega.Services
                     DrawDetail2D(canvas, detail, blackPaint, detailPaint);
                     DrawDetail2DLabel(canvas, detail, textPaint);
                 }
-                var rotatedBitmap = RotateBitmap90(bitmap);
-                var flippedBitmap = FlipBitmapVertically(rotatedBitmap);
+                var flippedBitmap = FlipBitmapVertically(bitmap);
                 images.Add(SKImage.FromBitmap(flippedBitmap).Encode().ToArray());
             }
 
