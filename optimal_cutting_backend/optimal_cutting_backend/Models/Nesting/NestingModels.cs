@@ -1,5 +1,6 @@
 using NetTopologySuite.Geometries;
 using System.Text.Json.Serialization;
+using vega.Models;
 
 namespace vega.Models.Nesting;
 
@@ -27,6 +28,7 @@ public class NestingOutputPoint
 public class NestingResult
 {
     public List<string> Sheets { get; set; } = new();
+    public List<Workpiece2D> Workpieces { get; set; } = new();
     public List<NestingPlacement> PlacedParts { get; set; } = new();
     public List<string> UnplacedParts { get; set; } = new();
     public Dictionary<string, double> UtilizationBySheet { get; set; } = new();

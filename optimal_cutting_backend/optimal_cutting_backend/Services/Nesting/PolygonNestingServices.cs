@@ -6,6 +6,7 @@ using netDxf;
 using netDxf.Entities;
 using System.Text;
 using vega.Controllers.DTO.Nesting;
+using vega.Models;
 using vega.Models.Nesting;
 using vega.Services.Interfaces.Nesting;
 
@@ -308,6 +309,7 @@ public class PolygonNestingService : IPolygonNestingService
             }
         }
 
+        res.Workpieces = BuildWorkpieces(outputSheets, res.PlacedParts, res.UtilizationBySheet);
         res.Svg = BuildSvg(outputSheets, res.PlacedParts);
         var dxf = new DxfDocument();
         foreach (var p in res.PlacedParts.Where(x => x.TransformedGeometry is Polygon))
@@ -349,6 +351,74 @@ public class PolygonNestingService : IPolygonNestingService
             .Take(coords.Length - 1)
             .Where(c => double.IsFinite(c.X) && double.IsFinite(c.Y))
             .Select(c => new NestingOutputPoint { X = c.X, Y = c.Y })
+            .ToList();
+
+    private static List<Workpiece2D> BuildWorkpieces(List<NormalizedPolygon> sheets, List<NestingPlacement> placements, Dictionary<string, double> utilizationBySheet)
+        => sheets.Select(sheet =>
+        {
+            var env = sheet.Polygon.EnvelopeInternal;
+            return new Workpiece2D
+            {
+                Width = Math.Max(1, (int)Math.Ceiling(env.Width)),
+                Height = Math.Max(1, (int)Math.Ceiling(env.Height)),
+                ProcentUsage = utilizationBySheet.GetValueOrDefault(sheet.Id),
+                Details = placements
+                    .Where(p => p.SheetId == sheet.Id && p.TransformedGeometry is Polygon)
+                    .Select(p => BuildDetail(p, env.MinX, env.MinY))
+                    .ToList()
+            };
+        }).ToList();
+
+    private static Detail2D BuildDetail(NestingPlacement placement, double offsetX, double offsetY)
+    {
+        var polygon = (Polygon)placement.TransformedGeometry!;
+        var env = polygon.EnvelopeInternal;
+        var width = Math.Max(1, (int)Math.Ceiling(env.Width));
+        var height = Math.Max(1, (int)Math.Ceiling(env.Height));
+        var x = env.MinX - offsetX;
+        var y = env.MinY - offsetY;
+
+        return new Detail2D
+        {
+            X = (float)x,
+            Y = (float)y,
+            Width = width,
+            Height = height,
+            OriginalWidth = width,
+            OriginalHeight = height,
+            RotatedWidth = height,
+            RotatedHeight = width,
+            Rotated = placement.Rotation == 90 || placement.Rotation == 270,
+            Name = placement.PartId,
+            MinX = (float)x,
+            MinY = (float)y,
+            MaxX = (float)(env.MaxX - offsetX),
+            MaxY = (float)(env.MaxY - offsetY),
+            Contour = BuildContour(polygon, offsetX, offsetY)
+        };
+    }
+
+    private static Contour2D BuildContour(Polygon polygon, double offsetX, double offsetY)
+    {
+        var env = polygon.EnvelopeInternal;
+        return new Contour2D
+        {
+            FilledContours = new List<List<Point2D>> { ToPoint2DRing(polygon.ExteriorRing.Coordinates, offsetX, offsetY) },
+            HoleContours = Enumerable.Range(0, polygon.NumInteriorRings)
+                .Select(i => ToPoint2DRing(polygon.GetInteriorRingN(i).Coordinates, offsetX, offsetY))
+                .ToList(),
+            MinX = (float)(env.MinX - offsetX),
+            MinY = (float)(env.MinY - offsetY),
+            MaxX = (float)(env.MaxX - offsetX),
+            MaxY = (float)(env.MaxY - offsetY)
+        };
+    }
+
+    private static List<Point2D> ToPoint2DRing(Coordinate[] coords, double offsetX, double offsetY)
+        => coords
+            .Take(coords.Length - 1)
+            .Where(c => double.IsFinite(c.X) && double.IsFinite(c.Y))
+            .Select(c => new Point2D((float)(c.X - offsetX), (float)(c.Y - offsetY)))
             .ToList();
 
     private static void AddPolygonToDxf(DxfDocument dxf, Polygon poly)
