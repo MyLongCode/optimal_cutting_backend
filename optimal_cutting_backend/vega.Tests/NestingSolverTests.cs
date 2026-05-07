@@ -1,4 +1,5 @@
 using NetTopologySuite.Geometries;
+using System.Text.Json;
 using vega.Controllers.DTO.Nesting;
 using vega.Services.Nesting;
 using Xunit;
@@ -36,7 +37,7 @@ public class NestingSolverTests
             ]
         };
 
-        var service = new PolygonNestingService(new GeometryNormalizer(), new PolygonValidator(), new NestingSolver(new NfpService(), new PlacementCandidateGenerator()));
+        var service = CreateService();
         var result = service.Nest(dto);
 
         Assert.NotEmpty(result.PlacedParts);
@@ -54,6 +55,119 @@ public class NestingSolverTests
 
         for (int i = 0; i < result.PlacedParts.Count; i++)
         for (int j = i + 1; j < result.PlacedParts.Count; j++)
-            Assert.False(result.PlacedParts[i].TransformedGeometry!.Intersects(result.PlacedParts[j].TransformedGeometry!));
+            Assert.True(result.PlacedParts[i].TransformedGeometry!.Intersection(result.PlacedParts[j].TransformedGeometry!).Area <= 1e-6);
     }
+    [Fact]
+    public void ScaledInput_ShouldApplyGapAndReturnOriginalUnits()
+    {
+        var dto = new Cutting2DNestingDTO
+        {
+            Scale = 1000,
+            Kerf = 2,
+            Clearance = 1,
+            Sheets =
+            [
+                new NestingSheetDto
+                {
+                    Id = "S1",
+                    Outer = [[new() { X = 0, Y = 0 }, new() { X = 103, Y = 0 }, new() { X = 103, Y = 50 }, new() { X = 0, Y = 50 }]]
+                }
+            ],
+            Parts =
+            [
+                new NestingPartDto
+                {
+                    Id = "P",
+                    Quantity = 2,
+                    Outer = [[new() { X = 0, Y = 0 }, new() { X = 50, Y = 0 }, new() { X = 50, Y = 50 }, new() { X = 0, Y = 50 }]]
+                }
+            ],
+            AllowedRotationsDegrees = [0]
+        };
+
+        var service = CreateService();
+        var result = service.Nest(dto);
+
+        Assert.Equal(2, result.PlacedParts.Count);
+        Assert.Empty(result.UnplacedParts);
+        Assert.All(result.PlacedParts, p => Assert.InRange(p.X, 0d, 103d));
+        Assert.All(result.PlacedParts, p => Assert.NotEmpty(p.Contours));
+        Assert.True(result.PlacedParts[0].TransformedGeometry!.Distance(result.PlacedParts[1].TransformedGeometry!) >= 3 - 1e-6);
+    }
+
+    [Fact]
+    public void NestingResult_ShouldSerializeWithoutRawNtsGeometry()
+    {
+        var dto = new Cutting2DNestingDTO
+        {
+            Scale = 1000,
+            Kerf = 2,
+            Clearance = 1,
+            Sheets =
+            [
+                new NestingSheetDto
+                {
+                    Id = "S1",
+                    Outer = [[new() { X = 0, Y = 0 }, new() { X = 103, Y = 0 }, new() { X = 103, Y = 50 }, new() { X = 0, Y = 50 }]]
+                }
+            ],
+            Parts =
+            [
+                new NestingPartDto
+                {
+                    Id = "P",
+                    Quantity = 1,
+                    Outer = [[new() { X = 0, Y = 0 }, new() { X = 50, Y = 0 }, new() { X = 50, Y = 50 }, new() { X = 0, Y = 50 }]]
+                }
+            ],
+            AllowedRotationsDegrees = [0]
+        };
+
+        var result = CreateService().Nest(dto);
+        var json = JsonSerializer.Serialize(result);
+
+        Assert.Contains("Contours", json);
+        Assert.DoesNotContain("TransformedGeometry", json);
+        Assert.DoesNotContain("Infinity", json);
+    }
+
+    [Fact]
+    public void ZeroGap_ShouldAllowPartsToShareCutLineWithoutOverlap()
+    {
+        var dto = new Cutting2DNestingDTO
+        {
+            Scale = 1,
+            Kerf = 0,
+            Clearance = 0,
+            Sheets =
+            [
+                new NestingSheetDto
+                {
+                    Id = "S1",
+                    Outer = [[new() { X = 0, Y = 0 }, new() { X = 100, Y = 0 }, new() { X = 100, Y = 50 }, new() { X = 0, Y = 50 }]]
+                }
+            ],
+            Parts =
+            [
+                new NestingPartDto
+                {
+                    Id = "P",
+                    Quantity = 2,
+                    Outer = [[new() { X = 0, Y = 0 }, new() { X = 50, Y = 0 }, new() { X = 50, Y = 50 }, new() { X = 0, Y = 50 }]]
+                }
+            ],
+            AllowedRotationsDegrees = [0]
+        };
+
+        var service = CreateService();
+        var result = service.Nest(dto);
+
+        Assert.Equal(2, result.PlacedParts.Count);
+        Assert.Empty(result.UnplacedParts);
+        Assert.True(result.PlacedParts[0].TransformedGeometry!.Intersection(result.PlacedParts[1].TransformedGeometry!).Area <= 1e-6);
+    }
+
+    private static PolygonNestingService CreateService()
+        => new(new GeometryNormalizer(), new PolygonValidator(), new NestingSolver(new NfpService(), new PlacementCandidateGenerator()));
+
 }
