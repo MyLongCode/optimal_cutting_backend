@@ -6,6 +6,7 @@ using netDxf;
 using netDxf.Entities;
 using System.Text;
 using vega.Controllers.DTO.Nesting;
+using vega.Models;
 using vega.Models.Nesting;
 using vega.Services.Interfaces.Nesting;
 
@@ -130,13 +131,17 @@ public class NestingSolver : INestingSolver
     public NestingResult Solve(List<NormalizedPolygon> sheets, List<NormalizedPolygon> parts, double kerf, double clearance, bool localSearch, IReadOnlyList<int>? rotations = null)
     {
         var res = new NestingResult { Sheets = sheets.Select(s => s.Id).ToList() };
-        var gap = kerf + clearance;
-        var angles = rotations is { Count: > 0 } ? rotations : new[] { 0, 90, 180, 270 };
+        var gap = Math.Max(0, kerf + clearance);
+        var angles = (rotations is { Count: > 0 } ? rotations : new[] { 0, 90, 180, 270 })
+            .Select(NormalizeAngle)
+            .Distinct()
+            .ToList();
         var placedBySheet = sheets.ToDictionary(s => s.Id, _ => new List<Geometry>());
 
-        foreach (var part in parts)
+        foreach (var part in parts.OrderByDescending(p => p.Polygon.Area))
         {
-            var done = false;
+            NestingPlacement? bestAcrossSheets = null;
+
             foreach (var sheet in sheets)
             {
                 foreach (var angle in angles)
@@ -146,34 +151,37 @@ public class NestingSolver : INestingSolver
                     var anchorNormalized = Translate(rotated, -anchor.X, -anchor.Y);
                     var inner = _nfp.BuildInnerNfp(sheet.Polygon, (Polygon)anchorNormalized, gap);
                     var forbiddens = placedBySheet[sheet.Id].Select(p => _nfp.BuildOuterNfp((Polygon)p, (Polygon)anchorNormalized, gap)).ToList();
-                    var candidates = _candidates.GenerateCandidates(inner, forbiddens).ToList();
-                    if (candidates.Count == 0)
-                    {
-                        candidates = BuildFallbackCandidates(sheet.Polygon).ToList();
-                    }
+                    var candidates = _candidates.GenerateCandidates(inner, forbiddens)
+                        .Concat(BuildFallbackCandidates(sheet.Polygon))
+                        .Concat(BuildEnvelopeCandidates(sheet.Polygon, anchorNormalized, placedBySheet[sheet.Id], gap))
+                        .Where(IsFiniteCoordinate)
+                        .OrderBy(c => c.Y)
+                        .ThenBy(c => c.X)
+                        .DistinctBy(c => $"{Math.Round(c.X, 6)}:{Math.Round(c.Y, 6)}")
+                        .ToList();
 
-                    NestingPlacement? best = null;
                     foreach (var c in candidates)
                     {
                         var moved = Translate(anchorNormalized, c.X, c.Y);
                         if (!IsValidPlacement(sheet.Polygon, moved, placedBySheet[sheet.Id], gap)) continue;
-                        if (best == null || IsBetter(moved, best.TransformedGeometry!))
+                        var placement = new NestingPlacement { PartId = part.Id, SheetId = sheet.Id, X = c.X, Y = c.Y, Rotation = angle, TransformedGeometry = moved };
+                        if (bestAcrossSheets == null || IsBetterPlacement(placement, bestAcrossSheets))
                         {
-                            best = new NestingPlacement { PartId = part.Id, SheetId = sheet.Id, X = c.X, Y = c.Y, Rotation = angle, TransformedGeometry = moved };
+                            bestAcrossSheets = placement;
                         }
                     }
-
-                    if (best != null)
-                    {
-                        placedBySheet[sheet.Id].Add(best.TransformedGeometry!);
-                        res.PlacedParts.Add(best);
-                        done = true;
-                        break;
-                    }
                 }
-                if (done) break;
             }
-            if (!done) res.UnplacedParts.Add(part.Id);
+
+            if (bestAcrossSheets != null)
+            {
+                placedBySheet[bestAcrossSheets.SheetId].Add(bestAcrossSheets.TransformedGeometry!);
+                res.PlacedParts.Add(bestAcrossSheets);
+            }
+            else
+            {
+                res.UnplacedParts.Add(part.Id);
+            }
         }
 
         foreach (var sheet in sheets)
@@ -197,6 +205,9 @@ public class NestingSolver : INestingSolver
     }
     private static Coordinate GetAnchor(Geometry g) => g.Coordinates.OrderBy(c => c.X).ThenBy(c => c.Y).First();
 
+    private static bool IsFiniteCoordinate(Coordinate coordinate)
+        => double.IsFinite(coordinate.X) && double.IsFinite(coordinate.Y);
+
     private static bool IsValidPlacement(Polygon sheet, Geometry moved, List<Geometry> placed, double gap)
     {
         if (!sheet.Covers(moved)) return false;
@@ -205,11 +216,17 @@ public class NestingSolver : INestingSolver
         {
             if (gap <= 0)
             {
-                if (p.Intersects(moved)) return false;
+                if (p.Intersection(moved).Area > 1e-6) return false;
             }
-            else if (p.Distance(moved) < gap || p.Intersects(moved)) return false;
+            else if (p.Distance(moved) < gap) return false;
         }
         return true;
+    }
+
+    private static bool IsBetterPlacement(NestingPlacement current, NestingPlacement previous)
+    {
+        if (current.SheetId != previous.SheetId) return string.CompareOrdinal(current.SheetId, previous.SheetId) < 0;
+        return IsBetter(current.TransformedGeometry!, previous.TransformedGeometry!);
     }
 
     private static bool IsBetter(Geometry current, Geometry previous)
@@ -237,6 +254,33 @@ public class NestingSolver : INestingSolver
             .ThenBy(c => c.X)
             .DistinctBy(c => $"{Math.Round(c.X, 6)}:{Math.Round(c.Y, 6)}");
     }
+
+    private static IEnumerable<Coordinate> BuildEnvelopeCandidates(Polygon sheet, Geometry anchorNormalized, List<Geometry> placed, double gap)
+    {
+        var sheetEnv = sheet.EnvelopeInternal;
+        var movingEnv = anchorNormalized.EnvelopeInternal;
+        var xs = new List<double> { sheetEnv.MinX - movingEnv.MinX };
+        var ys = new List<double> { sheetEnv.MinY - movingEnv.MinY };
+
+        foreach (var p in placed)
+        {
+            var env = p.EnvelopeInternal;
+            xs.Add(env.MinX - movingEnv.MaxX - gap);
+            xs.Add(env.MaxX - movingEnv.MinX + gap);
+            ys.Add(env.MinY - movingEnv.MaxY - gap);
+            ys.Add(env.MaxY - movingEnv.MinY + gap);
+        }
+
+        foreach (var x in xs)
+        foreach (var y in ys)
+            yield return new Coordinate(x, y);
+    }
+
+    private static int NormalizeAngle(int angle)
+    {
+        var normalized = angle % 360;
+        return normalized < 0 ? normalized + 360 : normalized;
+    }
 }
 
 public class PolygonNestingService : IPolygonNestingService
@@ -245,13 +289,28 @@ public class PolygonNestingService : IPolygonNestingService
     public PolygonNestingService(IGeometryNormalizer n, IPolygonValidator v, INestingSolver s) { _normalizer=n; _validator=v; _solver=s; }
     public NestingResult Nest(Cutting2DNestingDTO dto)
     {
+        if (dto.Scale <= 0) throw new ArgumentException("scale must be greater than zero");
+
         var sheets = dto.Sheets.Select(s => _normalizer.Normalize(s.Id, s.Outer, s.Holes, dto.Scale, true)).ToList();
         var parts = dto.Parts.SelectMany(p => Enumerable.Range(0, p.Quantity).Select(i => _normalizer.Normalize($"{p.Id}_{i+1}", p.Outer, p.Holes, dto.Scale, false))).ToList();
         sheets.ForEach(s => _validator.ValidatePolygon(s.Polygon, s.Id));
         parts.ForEach(p => _validator.ValidatePolygon(p.Polygon, p.Id));
-        var res = _solver.Solve(sheets, parts, dto.Kerf, dto.Clearance, dto.EnableLocalSearch, dto.AllowedRotationsDegrees);
+        var res = _solver.Solve(sheets, parts, dto.Kerf * dto.Scale, dto.Clearance * dto.Scale, dto.EnableLocalSearch, dto.AllowedRotationsDegrees);
 
-        res.Svg = BuildSvg(sheets, res.PlacedParts);
+        var outputSheets = sheets.Select(s => s with { Polygon = (Polygon)ScaleGeometry(s.Polygon, 1.0 / dto.Scale) }).ToList();
+        foreach (var placement in res.PlacedParts)
+        {
+            placement.X /= dto.Scale;
+            placement.Y /= dto.Scale;
+            if (placement.TransformedGeometry != null)
+            {
+                placement.TransformedGeometry = ScaleGeometry(placement.TransformedGeometry, 1.0 / dto.Scale);
+                placement.Contours = BuildPlacementContours(placement.TransformedGeometry);
+            }
+        }
+
+        res.Workpieces = BuildWorkpieces(outputSheets, res.PlacedParts, res.UtilizationBySheet);
+        res.Svg = BuildSvg(outputSheets, res.PlacedParts);
         var dxf = new DxfDocument();
         foreach (var p in res.PlacedParts.Where(x => x.TransformedGeometry is Polygon))
         {
@@ -261,6 +320,106 @@ public class PolygonNestingService : IPolygonNestingService
         using var ms = new MemoryStream(); dxf.Save(ms); res.Dxf = Convert.ToBase64String(ms.ToArray());
         return res;
     }
+
+    private static Geometry ScaleGeometry(Geometry geometry, double scale)
+    {
+        var transform = AffineTransformation.ScaleInstance(scale, scale);
+        var copy = (Geometry)geometry.Copy();
+        copy.Apply(transform);
+        return copy;
+    }
+
+    private static List<List<NestingOutputPoint>> BuildPlacementContours(Geometry geometry)
+    {
+        if (geometry is not Polygon poly) return new List<List<NestingOutputPoint>>();
+
+        var contours = new List<List<NestingOutputPoint>>
+        {
+            ToOutputRing(poly.ExteriorRing.Coordinates)
+        };
+
+        for (var i = 0; i < poly.NumInteriorRings; i++)
+        {
+            contours.Add(ToOutputRing(poly.GetInteriorRingN(i).Coordinates));
+        }
+
+        return contours;
+    }
+
+    private static List<NestingOutputPoint> ToOutputRing(Coordinate[] coords)
+        => coords
+            .Take(coords.Length - 1)
+            .Where(c => double.IsFinite(c.X) && double.IsFinite(c.Y))
+            .Select(c => new NestingOutputPoint { X = c.X, Y = c.Y })
+            .ToList();
+
+    private static List<Workpiece2D> BuildWorkpieces(List<NormalizedPolygon> sheets, List<NestingPlacement> placements, Dictionary<string, double> utilizationBySheet)
+        => sheets.Select(sheet =>
+        {
+            var env = sheet.Polygon.EnvelopeInternal;
+            return new Workpiece2D
+            {
+                Width = Math.Max(1, (int)Math.Ceiling(env.Width)),
+                Height = Math.Max(1, (int)Math.Ceiling(env.Height)),
+                ProcentUsage = utilizationBySheet.GetValueOrDefault(sheet.Id),
+                Details = placements
+                    .Where(p => p.SheetId == sheet.Id && p.TransformedGeometry is Polygon)
+                    .Select(p => BuildDetail(p, env.MinX, env.MinY))
+                    .ToList()
+            };
+        }).ToList();
+
+    private static Detail2D BuildDetail(NestingPlacement placement, double offsetX, double offsetY)
+    {
+        var polygon = (Polygon)placement.TransformedGeometry!;
+        var env = polygon.EnvelopeInternal;
+        var width = Math.Max(1, (int)Math.Ceiling(env.Width));
+        var height = Math.Max(1, (int)Math.Ceiling(env.Height));
+        var x = env.MinX - offsetX;
+        var y = env.MinY - offsetY;
+
+        return new Detail2D
+        {
+            X = (float)x,
+            Y = (float)y,
+            Width = width,
+            Height = height,
+            OriginalWidth = width,
+            OriginalHeight = height,
+            RotatedWidth = height,
+            RotatedHeight = width,
+            Rotated = placement.Rotation == 90 || placement.Rotation == 270,
+            Name = placement.PartId,
+            MinX = (float)x,
+            MinY = (float)y,
+            MaxX = (float)(env.MaxX - offsetX),
+            MaxY = (float)(env.MaxY - offsetY),
+            Contour = BuildContour(polygon, offsetX, offsetY)
+        };
+    }
+
+    private static Contour2D BuildContour(Polygon polygon, double offsetX, double offsetY)
+    {
+        var env = polygon.EnvelopeInternal;
+        return new Contour2D
+        {
+            FilledContours = new List<List<Point2D>> { ToPoint2DRing(polygon.ExteriorRing.Coordinates, offsetX, offsetY) },
+            HoleContours = Enumerable.Range(0, polygon.NumInteriorRings)
+                .Select(i => ToPoint2DRing(polygon.GetInteriorRingN(i).Coordinates, offsetX, offsetY))
+                .ToList(),
+            MinX = (float)(env.MinX - offsetX),
+            MinY = (float)(env.MinY - offsetY),
+            MaxX = (float)(env.MaxX - offsetX),
+            MaxY = (float)(env.MaxY - offsetY)
+        };
+    }
+
+    private static List<Point2D> ToPoint2DRing(Coordinate[] coords, double offsetX, double offsetY)
+        => coords
+            .Take(coords.Length - 1)
+            .Where(c => double.IsFinite(c.X) && double.IsFinite(c.Y))
+            .Select(c => new Point2D((float)(c.X - offsetX), (float)(c.Y - offsetY)))
+            .ToList();
 
     private static void AddPolygonToDxf(DxfDocument dxf, Polygon poly)
     {

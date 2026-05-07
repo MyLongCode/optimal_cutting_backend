@@ -63,60 +63,43 @@ namespace vega.Services
         public async Task<List<byte[]>> Draw2DCuttingAsync(Cutting2DResult result)
         {
             var images = new List<byte[]>();
+            if (result.Workpieces.Count == 0) return images;
+
             var detailColorsDict = new Dictionary<int, SKColor>();
 
-            var width = result.Workpieces[0].Width;
-            var height = result.Workpieces[0].Height;
-
-            var bitmap = new SKBitmap(width, height);
-            var canvas = new SKCanvas(bitmap);
-            canvas.Clear();
-            canvas.Translate(0, height);
-            canvas.Scale(1, -1);
-
-            var detailPaint = new SKPaint();
-            var blackPaint = new SKPaint();
-            var textPaint = new SKPaint();
-            blackPaint.Color = SKColors.Black;
-            textPaint.Color = SKColors.Black;
-            textPaint.TextSize = 14;
-            textPaint.IsAntialias = true;
+            var blackPaint = new SKPaint { Color = SKColors.Black };
+            var textPaint = new SKPaint
+            {
+                Color = SKColors.Black,
+                TextSize = 14,
+                IsAntialias = true
+            };
 
             foreach (var workpiece in result.Workpieces)
             {
+                var width = Math.Max(1, workpiece.Width);
+                var height = Math.Max(1, workpiece.Height);
+                using var bitmap = new SKBitmap(width, height);
+                using var canvas = new SKCanvas(bitmap);
                 canvas.Clear(SKColors.White);
+                canvas.Translate(0, height);
+                canvas.Scale(1, -1);
+
                 foreach (var detail in workpiece.Details)
                 {
                     var key = detail.Width * detail.Height;
                     var rnd = new Random();
                     if (!detailColorsDict.ContainsKey(key))
                         detailColorsDict[key] = Colors[rnd.Next(0, Colors.Count)];
-                    detailPaint.Color = detailColorsDict[key];
-
-
-                    var rect = new SKRect(detail.X, detail.Y, detail.X + detail.Width, detail.Y + detail.Height);
-                    canvas.DrawRect(rect, blackPaint);
-                    canvas.DrawRect(new SKRect(rect.Left + 1, rect.Top + 1, rect.Right - 1, rect.Bottom - 1), detailPaint);
-
-
-                    textPaint.TextSize = 36;
-
-                    if (detail.Width >= 40 && detail.Height >= 20)
+                    using var detailPaint = new SKPaint
                     {
-                        var text = $"{detail.Width}x{detail.Height}";
+                        Color = detailColorsDict[key],
+                        Style = SKPaintStyle.Fill,
+                        IsAntialias = true
+                    };
 
-                        if (detail.Width < 60)
-                        {
-                            canvas.Save();
-                            canvas.RotateDegrees(-90, rect.MidX, rect.MidY);
-                            canvas.DrawText(text, rect.MidX - rect.Width / 2, rect.MidY, textPaint);
-                            canvas.Restore();
-                        }
-                        else
-                        {
-                            canvas.DrawText(text, detail.X + 2, detail.Y + textPaint.TextSize, textPaint);
-                        }
-                    }
+                    DrawDetail2D(canvas, detail, blackPaint, detailPaint);
+                    DrawDetail2DLabel(canvas, detail, textPaint);
                 }
                 var rotatedBitmap = RotateBitmap90(bitmap);
                 var flippedBitmap = FlipBitmapVertically(rotatedBitmap);
@@ -124,6 +107,66 @@ namespace vega.Services
             }
 
             return images;
+        }
+
+        private static void DrawDetail2D(SKCanvas canvas, Detail2D detail, SKPaint borderPaint, SKPaint fillPaint)
+        {
+            if (detail.Contour?.FilledContours.Count > 0)
+            {
+                using var path = new SKPath { FillType = SKPathFillType.EvenOdd };
+                AddContoursToPath(path, detail.Contour.FilledContours);
+                AddContoursToPath(path, detail.Contour.HoleContours);
+                canvas.DrawPath(path, fillPaint);
+
+                using var strokePaint = new SKPaint
+                {
+                    Color = borderPaint.Color,
+                    Style = SKPaintStyle.Stroke,
+                    StrokeWidth = 1,
+                    IsAntialias = true
+                };
+                canvas.DrawPath(path, strokePaint);
+                return;
+            }
+
+            var rect = new SKRect(detail.X, detail.Y, detail.X + detail.Width, detail.Y + detail.Height);
+            canvas.DrawRect(rect, borderPaint);
+            canvas.DrawRect(new SKRect(rect.Left + 1, rect.Top + 1, rect.Right - 1, rect.Bottom - 1), fillPaint);
+        }
+
+        private static void AddContoursToPath(SKPath path, IEnumerable<List<Point2D>> contours)
+        {
+            foreach (var contour in contours.Where(c => c.Count > 0))
+            {
+                path.MoveTo(contour[0].X, contour[0].Y);
+                foreach (var point in contour.Skip(1))
+                {
+                    path.LineTo(point.X, point.Y);
+                }
+                path.Close();
+            }
+        }
+
+        private static void DrawDetail2DLabel(SKCanvas canvas, Detail2D detail, SKPaint textPaint)
+        {
+            textPaint.TextSize = 36;
+
+            if (detail.Width < 40 || detail.Height < 20) return;
+
+            var rect = new SKRect(detail.X, detail.Y, detail.X + detail.Width, detail.Y + detail.Height);
+            var text = string.IsNullOrWhiteSpace(detail.Name) ? $"{detail.Width}x{detail.Height}" : detail.Name;
+
+            if (detail.Width < 60)
+            {
+                canvas.Save();
+                canvas.RotateDegrees(-90, rect.MidX, rect.MidY);
+                canvas.DrawText(text, rect.MidX - rect.Width / 2, rect.MidY, textPaint);
+                canvas.Restore();
+            }
+            else
+            {
+                canvas.DrawText(text, detail.X + 2, detail.Y + textPaint.TextSize, textPaint);
+            }
         }
 
         public async Task<byte[]> DrawDXFAsync(List<Figure> figures)
