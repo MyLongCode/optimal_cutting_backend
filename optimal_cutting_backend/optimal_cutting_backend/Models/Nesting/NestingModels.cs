@@ -1,4 +1,5 @@
 using NetTopologySuite.Geometries;
+using System.Text.Json.Serialization;
 
 namespace vega.Models.Nesting;
 
@@ -11,7 +12,16 @@ public class NestingPlacement
     public double X { get; set; }
     public double Y { get; set; }
     public int Rotation { get; set; }
+    public List<List<NestingOutputPoint>> Contours { get; set; } = new();
+
+    [JsonIgnore]
     public Geometry? TransformedGeometry { get; set; }
+}
+
+public class NestingOutputPoint
+{
+    public double X { get; set; }
+    public double Y { get; set; }
 }
 
 public class NestingResult

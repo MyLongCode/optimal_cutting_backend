@@ -1,4 +1,5 @@
 using NetTopologySuite.Geometries;
+using System.Text.Json;
 using vega.Controllers.DTO.Nesting;
 using vega.Services.Nesting;
 using Xunit;
@@ -90,7 +91,44 @@ public class NestingSolverTests
         Assert.Equal(2, result.PlacedParts.Count);
         Assert.Empty(result.UnplacedParts);
         Assert.All(result.PlacedParts, p => Assert.InRange(p.X, 0d, 103d));
+        Assert.All(result.PlacedParts, p => Assert.NotEmpty(p.Contours));
         Assert.True(result.PlacedParts[0].TransformedGeometry!.Distance(result.PlacedParts[1].TransformedGeometry!) >= 3 - 1e-6);
+    }
+
+    [Fact]
+    public void NestingResult_ShouldSerializeWithoutRawNtsGeometry()
+    {
+        var dto = new Cutting2DNestingDTO
+        {
+            Scale = 1000,
+            Kerf = 2,
+            Clearance = 1,
+            Sheets =
+            [
+                new NestingSheetDto
+                {
+                    Id = "S1",
+                    Outer = [[new() { X = 0, Y = 0 }, new() { X = 103, Y = 0 }, new() { X = 103, Y = 50 }, new() { X = 0, Y = 50 }]]
+                }
+            ],
+            Parts =
+            [
+                new NestingPartDto
+                {
+                    Id = "P",
+                    Quantity = 1,
+                    Outer = [[new() { X = 0, Y = 0 }, new() { X = 50, Y = 0 }, new() { X = 50, Y = 50 }, new() { X = 0, Y = 50 }]]
+                }
+            ],
+            AllowedRotationsDegrees = [0]
+        };
+
+        var result = CreateService().Nest(dto);
+        var json = JsonSerializer.Serialize(result);
+
+        Assert.Contains("Contours", json);
+        Assert.DoesNotContain("TransformedGeometry", json);
+        Assert.DoesNotContain("Infinity", json);
     }
 
     [Fact]

@@ -153,6 +153,7 @@ public class NestingSolver : INestingSolver
                     var candidates = _candidates.GenerateCandidates(inner, forbiddens)
                         .Concat(BuildFallbackCandidates(sheet.Polygon))
                         .Concat(BuildEnvelopeCandidates(sheet.Polygon, anchorNormalized, placedBySheet[sheet.Id], gap))
+                        .Where(IsFiniteCoordinate)
                         .OrderBy(c => c.Y)
                         .ThenBy(c => c.X)
                         .DistinctBy(c => $"{Math.Round(c.X, 6)}:{Math.Round(c.Y, 6)}")
@@ -202,6 +203,9 @@ public class NestingSolver : INestingSolver
         var c = (Geometry)g.Copy(); c.Apply(t); return c;
     }
     private static Coordinate GetAnchor(Geometry g) => g.Coordinates.OrderBy(c => c.X).ThenBy(c => c.Y).First();
+
+    private static bool IsFiniteCoordinate(Coordinate coordinate)
+        => double.IsFinite(coordinate.X) && double.IsFinite(coordinate.Y);
 
     private static bool IsValidPlacement(Polygon sheet, Geometry moved, List<Geometry> placed, double gap)
     {
@@ -300,6 +304,7 @@ public class PolygonNestingService : IPolygonNestingService
             if (placement.TransformedGeometry != null)
             {
                 placement.TransformedGeometry = ScaleGeometry(placement.TransformedGeometry, 1.0 / dto.Scale);
+                placement.Contours = BuildPlacementContours(placement.TransformedGeometry);
             }
         }
 
@@ -321,6 +326,30 @@ public class PolygonNestingService : IPolygonNestingService
         copy.Apply(transform);
         return copy;
     }
+
+    private static List<List<NestingOutputPoint>> BuildPlacementContours(Geometry geometry)
+    {
+        if (geometry is not Polygon poly) return new List<List<NestingOutputPoint>>();
+
+        var contours = new List<List<NestingOutputPoint>>
+        {
+            ToOutputRing(poly.ExteriorRing.Coordinates)
+        };
+
+        for (var i = 0; i < poly.NumInteriorRings; i++)
+        {
+            contours.Add(ToOutputRing(poly.GetInteriorRingN(i).Coordinates));
+        }
+
+        return contours;
+    }
+
+    private static List<NestingOutputPoint> ToOutputRing(Coordinate[] coords)
+        => coords
+            .Take(coords.Length - 1)
+            .Where(c => double.IsFinite(c.X) && double.IsFinite(c.Y))
+            .Select(c => new NestingOutputPoint { X = c.X, Y = c.Y })
+            .ToList();
 
     private static void AddPolygonToDxf(DxfDocument dxf, Polygon poly)
     {
