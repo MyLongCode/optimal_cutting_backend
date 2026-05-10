@@ -124,6 +124,8 @@ public class PlacementCandidateGenerator : IPlacementCandidateGenerator
 
 public class NestingSolver : INestingSolver
 {
+    private const int LocalSearchIterations = 5;
+
     private readonly INfpService _nfp;
     private readonly IPlacementCandidateGenerator _candidates;
 
@@ -136,6 +138,14 @@ public class NestingSolver : INestingSolver
         double PartMaxY,
         double PartMinY,
         double PartMinX);
+
+    private readonly record struct LayoutScore(
+        double TotalOccupiedEnvelopeArea,
+        double MaxOccupiedHeight,
+        double MaxOccupiedWidth,
+        double ContactPenalty,
+        double SameKindSpreadPenalty,
+        double BottomLeftPenalty);
 
     public NestingSolver(INfpService nfp, IPlacementCandidateGenerator candidates) { _nfp = nfp; _candidates = candidates; }
 
@@ -151,43 +161,7 @@ public class NestingSolver : INestingSolver
 
         foreach (var part in parts.OrderByDescending(p => p.Polygon.Area))
         {
-            NestingPlacement? bestAcrossSheets = null;
-            PlacementScore? bestScore = null;
-
-            foreach (var sheet in sheets)
-            {
-                foreach (var angle in angles)
-                {
-                    var rotated = Rotate(part.Polygon, angle);
-                    var anchor = GetAnchor(rotated);
-                    var anchorNormalized = Translate(rotated, -anchor.X, -anchor.Y);
-                    var inner = _nfp.BuildInnerNfp(sheet.Polygon, (Polygon)anchorNormalized, gap);
-                    var forbiddens = placedBySheet[sheet.Id].Select(p => _nfp.BuildOuterNfp((Polygon)p, (Polygon)anchorNormalized, gap)).ToList();
-                    var candidates = _candidates.GenerateCandidates(inner, forbiddens)
-                        .Concat(BuildFallbackCandidates(sheet.Polygon))
-                        .Concat(BuildEnvelopeCandidates(sheet.Polygon, anchorNormalized, placedBySheet[sheet.Id], gap))
-                        .Where(IsFiniteCoordinate)
-                        .OrderBy(c => c.Y)
-                        .ThenBy(c => c.X)
-                        .DistinctBy(c => $"{Math.Round(c.X, 6)}:{Math.Round(c.Y, 6)}")
-                        .ToList();
-
-                    foreach (var c in candidates)
-                    {
-                        var moved = Translate(anchorNormalized, c.X, c.Y);
-                        if (!IsValidPlacement(sheet.Polygon, moved, placedBySheet[sheet.Id], gap)) continue;
-
-                        var currentScore = ScorePlacement(moved, placedBySheet[sheet.Id]);
-                        var placement = new NestingPlacement { PartId = part.Id, SheetId = sheet.Id, X = c.X, Y = c.Y, Rotation = angle, TransformedGeometry = moved };
-
-                        if (bestAcrossSheets == null || bestScore == null || IsBetterPlacement(placement, currentScore, bestAcrossSheets, bestScore.Value))
-                        {
-                            bestScore = currentScore;
-                            bestAcrossSheets = placement;
-                        }
-                    }
-                }
-            }
+            var bestAcrossSheets = FindBestGreedyPlacement(part, sheets, gap, angles, placedBySheet);
 
             if (bestAcrossSheets != null)
             {
@@ -200,6 +174,12 @@ public class NestingSolver : INestingSolver
             }
         }
 
+        if (localSearch && res.PlacedParts.Count > 1)
+        {
+            res.PlacedParts = ImproveLayout(sheets, parts, res.PlacedParts, gap, angles);
+            res.PlacedParts = CompactLayout(sheets, parts, res.PlacedParts, gap, angles);
+        }
+
         foreach (var sheet in sheets)
         {
             var area = res.PlacedParts.Where(p => p.SheetId == sheet.Id).Sum(p => p.TransformedGeometry?.Area ?? 0);
@@ -207,6 +187,207 @@ public class NestingSolver : INestingSolver
         }
         res.TotalUtilization = res.UtilizationBySheet.Count == 0 ? 0 : res.UtilizationBySheet.Values.Average();
         return res;
+    }
+
+    private NestingPlacement? FindBestGreedyPlacement(
+        NormalizedPolygon part,
+        List<NormalizedPolygon> sheets,
+        double gap,
+        IReadOnlyList<int> angles,
+        Dictionary<string, List<Geometry>> placedBySheet)
+    {
+        NestingPlacement? bestAcrossSheets = null;
+        PlacementScore? bestScore = null;
+
+        foreach (var placement in EnumerateValidPlacements(part, sheets, gap, angles, placedBySheet))
+        {
+            var currentScore = ScorePlacement(placement.TransformedGeometry!, placedBySheet[placement.SheetId]);
+
+            if (bestAcrossSheets == null || bestScore == null || IsBetterPlacement(placement, currentScore, bestAcrossSheets, bestScore.Value))
+            {
+                bestScore = currentScore;
+                bestAcrossSheets = placement;
+            }
+        }
+
+        return bestAcrossSheets;
+    }
+
+    private List<NestingPlacement> ImproveLayout(
+        List<NormalizedPolygon> sheets,
+        List<NormalizedPolygon> parts,
+        List<NestingPlacement> initialPlacements,
+        double gap,
+        IReadOnlyList<int> angles)
+    {
+        var partById = parts.ToDictionary(p => p.Id, p => p);
+        var current = initialPlacements.Select(ClonePlacement).ToList();
+        var currentScore = ScoreLayout(sheets, current, gap);
+
+        for (var iteration = 0; iteration < LocalSearchIterations; iteration++)
+        {
+            var improved = false;
+
+            // Move large parts first: early bad decisions usually dominate the occupied envelope.
+            var moveOrder = current
+                .Where(p => p.TransformedGeometry != null && partById.ContainsKey(p.PartId))
+                .OrderByDescending(p => p.TransformedGeometry!.Area)
+                .ThenBy(p => p.PartId, StringComparer.Ordinal)
+                .Select(p => p.PartId)
+                .ToList();
+
+            foreach (var partId in moveOrder)
+            {
+                var part = partById[partId];
+                var fixedPlacements = current.Where(p => p.PartId != partId).Select(ClonePlacement).ToList();
+                var fixedBySheet = BuildPlacedGeometryBySheet(sheets, fixedPlacements);
+
+                NestingPlacement? bestCandidate = null;
+                LayoutScore? bestCandidateScore = null;
+
+                foreach (var candidate in EnumerateValidPlacements(part, sheets, gap, angles, fixedBySheet))
+                {
+                    var trial = fixedPlacements.Concat(new[] { candidate }).ToList();
+                    var trialScore = ScoreLayout(sheets, trial, gap);
+
+                    if (bestCandidate == null || bestCandidateScore == null || IsBetterLayoutScore(trialScore, bestCandidateScore.Value))
+                    {
+                        bestCandidate = candidate;
+                        bestCandidateScore = trialScore;
+                    }
+                }
+
+                if (bestCandidate != null && bestCandidateScore != null && IsBetterLayoutScore(bestCandidateScore.Value, currentScore))
+                {
+                    current = fixedPlacements.Concat(new[] { bestCandidate }).ToList();
+                    currentScore = bestCandidateScore.Value;
+                    improved = true;
+                }
+            }
+
+            if (!improved) break;
+        }
+
+        return current
+            .OrderBy(p => p.SheetId, StringComparer.Ordinal)
+            .ThenBy(p => p.TransformedGeometry?.EnvelopeInternal.MinY ?? 0)
+            .ThenBy(p => p.TransformedGeometry?.EnvelopeInternal.MinX ?? 0)
+            .ToList();
+    }
+
+    private List<NestingPlacement> CompactLayout(
+        List<NormalizedPolygon> sheets,
+        List<NormalizedPolygon> parts,
+        List<NestingPlacement> initialPlacements,
+        double gap,
+        IReadOnlyList<int> angles)
+    {
+        var partById = parts.ToDictionary(p => p.Id, p => p);
+        var current = initialPlacements.Select(ClonePlacement).ToList();
+        var currentScore = ScoreLayout(sheets, current, gap);
+
+        // A few deterministic passes are enough: each pass removes one part and reinserts it
+        // with the current global score, so previously frozen greedy choices can be corrected.
+        for (var pass = 0; pass < 3; pass++)
+        {
+            var improved = false;
+            var order = current
+                .Where(p => p.TransformedGeometry != null && partById.ContainsKey(p.PartId))
+                .OrderBy(p => p.TransformedGeometry!.EnvelopeInternal.MinY)
+                .ThenBy(p => p.TransformedGeometry!.EnvelopeInternal.MinX)
+                .Select(p => p.PartId)
+                .ToList();
+
+            foreach (var partId in order)
+            {
+                var original = current.First(p => p.PartId == partId);
+                var part = partById[partId];
+                var fixedPlacements = current.Where(p => p.PartId != partId).Select(ClonePlacement).ToList();
+                var fixedBySheet = BuildPlacedGeometryBySheet(sheets, fixedPlacements);
+
+                // In compaction, keep the current rotation first, but allow the configured rotations as fallback.
+                var compactAngles = new[] { original.Rotation }
+                    .Concat(angles)
+                    .Select(NormalizeAngle)
+                    .Distinct()
+                    .ToList();
+
+                NestingPlacement? bestCandidate = null;
+                LayoutScore? bestCandidateScore = null;
+
+                foreach (var candidate in EnumerateValidPlacements(part, sheets, gap, compactAngles, fixedBySheet))
+                {
+                    var trial = fixedPlacements.Concat(new[] { candidate }).ToList();
+                    var trialScore = ScoreLayout(sheets, trial, gap);
+
+                    if (bestCandidate == null || bestCandidateScore == null || IsBetterLayoutScore(trialScore, bestCandidateScore.Value))
+                    {
+                        bestCandidate = candidate;
+                        bestCandidateScore = trialScore;
+                    }
+                }
+
+                if (bestCandidate != null && bestCandidateScore != null && IsBetterLayoutScore(bestCandidateScore.Value, currentScore))
+                {
+                    current = fixedPlacements.Concat(new[] { bestCandidate }).ToList();
+                    currentScore = bestCandidateScore.Value;
+                    improved = true;
+                }
+            }
+
+            if (!improved) break;
+        }
+
+        return current
+            .OrderBy(p => p.SheetId, StringComparer.Ordinal)
+            .ThenBy(p => p.TransformedGeometry?.EnvelopeInternal.MinY ?? 0)
+            .ThenBy(p => p.TransformedGeometry?.EnvelopeInternal.MinX ?? 0)
+            .ToList();
+    }
+
+    private IEnumerable<NestingPlacement> EnumerateValidPlacements(
+        NormalizedPolygon part,
+        List<NormalizedPolygon> sheets,
+        double gap,
+        IReadOnlyList<int> angles,
+        Dictionary<string, List<Geometry>> placedBySheet)
+    {
+        foreach (var sheet in sheets)
+        {
+            foreach (var angle in angles)
+            {
+                var rotated = Rotate(part.Polygon, angle);
+                var anchor = GetAnchor(rotated);
+                var anchorNormalized = Translate(rotated, -anchor.X, -anchor.Y);
+                var inner = _nfp.BuildInnerNfp(sheet.Polygon, (Polygon)anchorNormalized, gap);
+                var placedOnSheet = placedBySheet.TryGetValue(sheet.Id, out var existing) ? existing : new List<Geometry>();
+                var forbiddens = placedOnSheet.Select(p => _nfp.BuildOuterNfp((Polygon)p, (Polygon)anchorNormalized, gap)).ToList();
+                var candidates = _candidates.GenerateCandidates(inner, forbiddens)
+                    .Concat(BuildFallbackCandidates(sheet.Polygon))
+                    .Concat(BuildEnvelopeCandidates(sheet.Polygon, anchorNormalized, placedOnSheet, gap))
+                    .Where(IsFiniteCoordinate)
+                    .OrderBy(c => c.Y)
+                    .ThenBy(c => c.X)
+                    .DistinctBy(c => $"{Math.Round(c.X, 6)}:{Math.Round(c.Y, 6)}")
+                    .ToList();
+
+                foreach (var c in candidates)
+                {
+                    var moved = Translate(anchorNormalized, c.X, c.Y);
+                    if (!IsValidPlacement(sheet.Polygon, moved, placedOnSheet, gap)) continue;
+
+                    yield return new NestingPlacement
+                    {
+                        PartId = part.Id,
+                        SheetId = sheet.Id,
+                        X = c.X,
+                        Y = c.Y,
+                        Rotation = angle,
+                        TransformedGeometry = moved
+                    };
+                }
+            }
+        }
     }
 
     private static Geometry Rotate(Geometry g, int angle)
@@ -284,6 +465,100 @@ public class NestingSolver : INestingSolver
             PartMinX: movedEnv.MinX);
     }
 
+    private static LayoutScore ScoreLayout(List<NormalizedPolygon> sheets, List<NestingPlacement> placements, double gap)
+    {
+        var totalOccupiedEnvelopeArea = 0d;
+        var maxOccupiedHeight = 0d;
+        var maxOccupiedWidth = 0d;
+        var contactPenalty = 0d;
+        var bottomLeftPenalty = 0d;
+
+        foreach (var sheet in sheets)
+        {
+            var placedOnSheet = placements
+                .Where(p => p.SheetId == sheet.Id && p.TransformedGeometry != null)
+                .ToList();
+
+            if (placedOnSheet.Count == 0) continue;
+
+            var occupied = new Envelope(placedOnSheet[0].TransformedGeometry!.EnvelopeInternal);
+            foreach (var placement in placedOnSheet.Skip(1)) occupied.ExpandToInclude(placement.TransformedGeometry!.EnvelopeInternal);
+
+            totalOccupiedEnvelopeArea += occupied.Width * occupied.Height;
+            maxOccupiedHeight = Math.Max(maxOccupiedHeight, occupied.Height);
+            maxOccupiedWidth = Math.Max(maxOccupiedWidth, occupied.Width);
+
+            foreach (var placement in placedOnSheet)
+            {
+                var geom = placement.TransformedGeometry!;
+                var env = geom.EnvelopeInternal;
+                bottomLeftPenalty += env.MinY * 1e-3 + env.MinX * 1e-6;
+
+                var nearestDistance = geom.Distance(sheet.Polygon.Boundary);
+                foreach (var other in placedOnSheet)
+                {
+                    if (ReferenceEquals(placement, other)) continue;
+                    nearestDistance = Math.Min(nearestDistance, geom.Distance(other.TransformedGeometry!));
+                }
+
+                // Distance values are in normalized units; only a tiny weight is needed.
+                // A lower value means more contact with the sheet edge or neighboring parts.
+                contactPenalty += Math.Max(0, nearestDistance - gap) * 1e-3;
+            }
+        }
+
+        var sameKindSpreadPenalty = ScoreSameKindSpread(placements) * 1e-3;
+
+        return new LayoutScore(
+            TotalOccupiedEnvelopeArea: totalOccupiedEnvelopeArea,
+            MaxOccupiedHeight: maxOccupiedHeight,
+            MaxOccupiedWidth: maxOccupiedWidth,
+            ContactPenalty: contactPenalty,
+            SameKindSpreadPenalty: sameKindSpreadPenalty,
+            BottomLeftPenalty: bottomLeftPenalty);
+    }
+
+    private static double ScoreSameKindSpread(List<NestingPlacement> placements)
+    {
+        var penalty = 0d;
+
+        foreach (var group in placements
+            .Where(p => p.TransformedGeometry != null)
+            .GroupBy(p => GetBasePartId(p.PartId)))
+        {
+            var items = group.ToList();
+            if (items.Count < 2) continue;
+
+            var env = new Envelope(items[0].TransformedGeometry!.EnvelopeInternal);
+            foreach (var item in items.Skip(1)) env.ExpandToInclude(item.TransformedGeometry!.EnvelopeInternal);
+            penalty += env.Width * env.Height;
+        }
+
+        return penalty;
+    }
+
+    private static bool IsBetterLayoutScore(LayoutScore current, LayoutScore previous)
+    {
+        const double eps = 1e-6;
+
+        if (Math.Abs(current.TotalOccupiedEnvelopeArea - previous.TotalOccupiedEnvelopeArea) > eps)
+            return current.TotalOccupiedEnvelopeArea < previous.TotalOccupiedEnvelopeArea;
+
+        if (Math.Abs(current.MaxOccupiedHeight - previous.MaxOccupiedHeight) > eps)
+            return current.MaxOccupiedHeight < previous.MaxOccupiedHeight;
+
+        if (Math.Abs(current.MaxOccupiedWidth - previous.MaxOccupiedWidth) > eps)
+            return current.MaxOccupiedWidth < previous.MaxOccupiedWidth;
+
+        if (Math.Abs(current.SameKindSpreadPenalty - previous.SameKindSpreadPenalty) > eps)
+            return current.SameKindSpreadPenalty < previous.SameKindSpreadPenalty;
+
+        if (Math.Abs(current.ContactPenalty - previous.ContactPenalty) > eps)
+            return current.ContactPenalty < previous.ContactPenalty;
+
+        return current.BottomLeftPenalty < previous.BottomLeftPenalty;
+    }
+
     private static bool IsBetterScore(PlacementScore current, PlacementScore previous)
     {
         const double eps = 1e-6;
@@ -308,6 +583,32 @@ public class NestingSolver : INestingSolver
         if (Math.Abs(current.ExpansionArea - previous.ExpansionArea) > eps) return current.ExpansionArea < previous.ExpansionArea;
         if (Math.Abs(current.PartMinY - previous.PartMinY) > eps) return current.PartMinY < previous.PartMinY;
         return current.PartMinX < previous.PartMinX;
+    }
+
+    private static Dictionary<string, List<Geometry>> BuildPlacedGeometryBySheet(List<NormalizedPolygon> sheets, IEnumerable<NestingPlacement> placements)
+        => sheets.ToDictionary(
+            s => s.Id,
+            s => placements
+                .Where(p => p.SheetId == s.Id && p.TransformedGeometry != null)
+                .Select(p => p.TransformedGeometry!)
+                .ToList());
+
+    private static NestingPlacement ClonePlacement(NestingPlacement placement)
+        => new()
+        {
+            PartId = placement.PartId,
+            SheetId = placement.SheetId,
+            X = placement.X,
+            Y = placement.Y,
+            Rotation = placement.Rotation,
+            Contours = placement.Contours,
+            TransformedGeometry = placement.TransformedGeometry == null ? null : (Geometry)placement.TransformedGeometry.Copy()
+        };
+
+    private static string GetBasePartId(string partId)
+    {
+        var index = partId.LastIndexOf('_');
+        return index <= 0 ? partId : partId[..index];
     }
 
     private static IEnumerable<Coordinate> BuildFallbackCandidates(Polygon sheet)
