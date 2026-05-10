@@ -39,6 +39,7 @@ export type Workpiece2D = {
     details: unknown[];
     usedArea: number;
     percentUsage: number;
+    procentUsage?: number;
 };
 
 export type Cutting2DNestingResult = {

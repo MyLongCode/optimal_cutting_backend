@@ -2,7 +2,10 @@ import { Button, Card, Flex, Typography } from 'antd';
 import { Cutting2DForm } from '../../components/forms/Cutting2DForm/Cutting2DForm';
 import { useAppSelector } from '../../app/hooks';
 import { selectCalculateData2D } from '../../features/cutting2DSlice';
+import { Cutting2DNestingResult } from '../../types/Nesting2D';
 import styles from './Cutting2D.module.css';
+
+const DEFAULT_PREVIEW_SIZE = 1000;
 
 const downloadTextFile = (content: string, filename: string, type: string) => {
     const blob = new Blob([content], { type });
@@ -14,9 +17,29 @@ const downloadTextFile = (content: string, filename: string, type: string) => {
     URL.revokeObjectURL(url);
 };
 
+const getPreviewSize = (cuttingData: Cutting2DNestingResult) => {
+    const firstWorkpiece = cuttingData.workpieces[0];
+
+    return {
+        width: Math.max(firstWorkpiece?.width ?? DEFAULT_PREVIEW_SIZE, 1),
+        height: Math.max(firstWorkpiece?.height ?? DEFAULT_PREVIEW_SIZE, 1),
+    };
+};
+
+const withSvgViewBox = (svg: string, cuttingData: Cutting2DNestingResult) => {
+    if (!svg || svg.includes('viewBox=')) return svg;
+
+    const { width, height } = getPreviewSize(cuttingData);
+    return svg.replace(
+        '<svg ',
+        `<svg width="${width}" height="${height}" viewBox="0 -${height} ${width} ${height}" `
+    );
+};
+
 export const Cutting2D = () => {
     const cuttingData = useAppSelector(selectCalculateData2D);
-    const hasResult = cuttingData.svg.length > 0 || cuttingData.placedParts.length > 0;
+    const previewSvg = withSvgViewBox(cuttingData.svg, cuttingData);
+    const hasResult = previewSvg.length > 0 || cuttingData.placedParts.length > 0;
 
     return (
         <Flex className={styles.cutting2D} gap={24}>
@@ -45,10 +68,10 @@ export const Cutting2D = () => {
                         </Card>
                         <Flex gap={12}>
                             <Button
-                                disabled={!cuttingData.svg}
+                                disabled={!previewSvg}
                                 onClick={() =>
                                     downloadTextFile(
-                                        cuttingData.svg,
+                                        previewSvg,
                                         'cutting-2d.svg',
                                         'image/svg+xml'
                                     )
@@ -69,10 +92,10 @@ export const Cutting2D = () => {
                                 Скачать DXF
                             </Button>
                         </Flex>
-                        {cuttingData.svg && (
+                        {previewSvg && (
                             <div
                                 className={styles.cutting2D__svg}
-                                dangerouslySetInnerHTML={{ __html: cuttingData.svg }}
+                                dangerouslySetInnerHTML={{ __html: previewSvg }}
                             />
                         )}
                     </>
