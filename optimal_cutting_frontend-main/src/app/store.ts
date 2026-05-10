@@ -6,12 +6,14 @@ import cutting1D from '../features/cutting1DSlice';
 import maxLengthWorkpieces from '../features/maxLengthWorkpieces';
 import dxf from '../features/dxfSlice';
 import selectDetails2D from '../features/selectDetails2DSlice';
+import cutting2D from '../features/cutting2DSlice';
 
 export const store = configureStore({
     reducer: {
         [api.reducerPath]: api.reducer,
         auth,
         cutting1D,
+        cutting2D,
         maxLengthWorkpieces,
         dxf,
         selectDetails2D,
