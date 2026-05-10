@@ -1,0 +1,32 @@
+.cutting2D {
+    width: 100%;
+    min-height: 100%;
+}
+
+.cutting2D__result {
+    width: 100%;
+    overflow: auto;
+}
+
+.cutting2D__summary {
+    width: 100%;
+}
+
+.cutting2D__svg {
+    width: 100%;
+    overflow: auto;
+    padding: 16px;
+    background-color: var(--white);
+}
+
+.cutting2D__svg svg {
+    max-width: 100%;
+    height: auto;
+}
+
+.cutting2D__empty {
+    min-height: 360px;
+    padding: 24px;
+    color: rgba(0, 0, 0, 0.45);
+    background-color: var(--white);
+}
