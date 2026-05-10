@@ -26,8 +26,8 @@ type SheetSize = {
 };
 
 type ManualSheetForm = {
-    width: number;
-    height: number;
+    width?: number;
+    height?: number;
 };
 
 const getRectangleSheet = ({ id, width, height }: SheetSize) => ({
@@ -45,12 +45,29 @@ const getRectangleSheet = ({ id, width, height }: SheetSize) => ({
 
 const getDetailIdsByCounts = (
     details: Designation[],
-    counts: Record<string, number | undefined>
+    counts: Record<string, unknown>
 ) =>
     details.flatMap((detail, index) => {
         const count = Number(counts[`count_${index + 1}`] ?? 0);
-        return Array.from({ length: count }, () => detail.id);
+
+        if (!Number.isFinite(count) || count <= 0) return [];
+
+        return Array.from({ length: Math.trunc(count) }, () => detail.id);
     });
+
+const getErrorMessage = (error: unknown) => {
+    if (typeof error === 'object' && error !== null && 'data' in error) {
+        const data = (error as { data?: unknown }).data;
+
+        if (typeof data === 'string') return data;
+        if (typeof data === 'object' && data !== null && 'message' in data) {
+            const message = (data as { message?: unknown }).message;
+            if (typeof message === 'string') return message;
+        }
+    }
+
+    return 'Не удалось выполнить расчет. Проверьте параметры и повторите попытку.';
+};
 
 export const Cutting2DForm = () => {
     const [formDetail] = Form.useForm();
@@ -80,7 +97,7 @@ export const Cutting2DForm = () => {
         tab: modeBlank,
     };
 
-    const buildSheet = async () => {
+    const buildSheet = () => {
         if (modeBlank === TabsOptions.valueFirst) {
             if (!selectedWorkpiece) return null;
 
@@ -91,51 +108,53 @@ export const Cutting2DForm = () => {
             });
         }
 
-        const manualSheet = await formManualSheet.validateFields();
+        const { width = 0, height = 0 } = formManualSheet.getFieldsValue(true);
+        if (width <= 0 || height <= 0) return null;
+
         return getRectangleSheet({
             id: 'custom-sheet-1',
-            width: manualSheet.width,
-            height: manualSheet.height,
+            width,
+            height,
         });
     };
 
     const handlerSubmit = async () => {
         setError('');
+
+        if (selectedDetails.length === 0) {
+            setError('Добавьте хотя бы одну деталь из базы данных.');
+            return;
+        }
+
+        const detailIds = getDetailIdsByCounts(
+            selectedDetails,
+            formDetail.getFieldsValue(true)
+        );
+        if (detailIds.length === 0) {
+            setError('Укажите количество хотя бы для одной детали.');
+            return;
+        }
+
+        const sheet = buildSheet();
+        if (!sheet) {
+            setError('Выберите стандартную заготовку или введите размеры новой.');
+            return;
+        }
+
+        const request: Cutting2DNestingFromDbRequest = {
+            detailIds,
+            sheets: [sheet],
+            kerf,
+            clearance,
+            scale: DEFAULT_SCALE,
+            enableLocalSearch: true,
+            allowedRotationsDegrees: DEFAULT_ROTATIONS,
+        };
+
         try {
-            if (selectedDetails.length === 0) {
-                setError('Добавьте хотя бы одну деталь из базы данных.');
-                return;
-            }
-
-            await formDetail.validateFields();
-            const detailIds = getDetailIdsByCounts(
-                selectedDetails,
-                formDetail.getFieldsValue()
-            );
-            if (detailIds.length === 0) {
-                setError('Укажите количество хотя бы для одной детали.');
-                return;
-            }
-
-            const sheet = await buildSheet();
-            if (!sheet) {
-                setError('Выберите стандартную заготовку или введите размеры новой.');
-                return;
-            }
-
-            const request: Cutting2DNestingFromDbRequest = {
-                detailIds,
-                sheets: [sheet],
-                kerf,
-                clearance,
-                scale: DEFAULT_SCALE,
-                enableLocalSearch: true,
-                allowedRotationsDegrees: DEFAULT_ROTATIONS,
-            };
-
             await calculate2DNestingFromDb(request).unwrap();
-        } catch {
-            setError('Проверьте заполнение формы и повторите расчет.');
+        } catch (requestError) {
+            setError(getErrorMessage(requestError));
         }
     };
 
