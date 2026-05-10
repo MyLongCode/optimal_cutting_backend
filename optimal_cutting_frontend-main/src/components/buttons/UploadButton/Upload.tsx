@@ -29,7 +29,7 @@ const Upload = ({
     };
     const removeFile = (indexI: number) => {
         if (uploadedFiles) {
-            const currentFiles = uploadedFiles.filter((file, index) => index !== indexI);
+            const currentFiles = uploadedFiles.filter((_file, index) => index !== indexI);
 
             updateUploadFiles(currentFiles);
         }

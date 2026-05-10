@@ -27,7 +27,7 @@ import {
 
 type Props = {
     typeTable: TableTypes;
-    form: FormInstance<any>;
+    form: FormInstance;
 };
 
 export const Table = ({ typeTable, form }: Props) => {
@@ -78,7 +78,7 @@ export const Table = ({ typeTable, form }: Props) => {
         }
     };
 
-    const onFinish = async (data: any) => {
+    const onFinish = async (data: Record<string, string>) => {
         if (typeTable === TableTypes.detail1D) {
             const details = changeDetails1DDownload(data);
             await downloadFileCSV1D(JSON.stringify(details));
