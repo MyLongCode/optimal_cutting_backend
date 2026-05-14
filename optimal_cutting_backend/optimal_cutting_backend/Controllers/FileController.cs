@@ -153,9 +153,17 @@ namespace vega.Controllers
         /// <returns>png scheme cutting</returns>
         [HttpPost]
         [Route("2d/export/result/png")]
-        public async Task<IActionResult> ExportPng([FromBody] Cutting2DResult dto)
+        public async Task<IActionResult> ExportPng([FromBody] Cutting2DResult dto, [FromQuery] bool preview = false)
         {
             var imageBytes = await _drawService.Draw2DCuttingAsync(dto);
+
+            if (preview)
+            {
+                var previewImage = imageBytes.FirstOrDefault();
+                if (previewImage == null) return NotFound("preview image not found");
+
+                return File(previewImage, "image/png");
+            }
 
             using (var ms = new MemoryStream())
             {

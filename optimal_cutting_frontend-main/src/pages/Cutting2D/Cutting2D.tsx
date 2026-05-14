@@ -1,8 +1,10 @@
-import { Alert, Button, Card, Flex, Typography } from 'antd';
+import { Alert, Button, Card, Flex, Image, Typography } from 'antd';
 import { Cutting2DForm } from '../../components/forms/Cutting2DForm/Cutting2DForm';
+import { useEffect, useState } from 'react';
 import { useAppSelector } from '../../app/hooks';
 import { selectCalculateData2D } from '../../features/cutting2DSlice';
 import { Cutting2DNestingResult, NestingOutputPoint } from '../../types/Nesting2D';
+import { getPNG2DCuttingPreview } from '../../functions/fetchFiles';
 import styles from './Cutting2D.module.css';
 
 const DEFAULT_PREVIEW_SIZE = 1000;
@@ -17,6 +19,12 @@ const downloadTextFile = (content: string, filename: string, type: string) => {
     link.click();
     URL.revokeObjectURL(url);
 };
+
+const getPreviewRequestBody = (cuttingData: Cutting2DNestingResult) =>
+    JSON.stringify({
+        workpieces: cuttingData.workpieces,
+        totalPercentUsage: cuttingData.totalUtilization,
+    });
 
 const getPreviewSize = (cuttingData: Cutting2DNestingResult) => {
     const firstWorkpiece = cuttingData.workpieces[0];
@@ -161,11 +169,42 @@ const DebugResponseMessage = ({ cuttingData }: { cuttingData: Cutting2DNestingRe
 
 export const Cutting2D = () => {
     const cuttingData = useAppSelector(selectCalculateData2D);
+    const [previewImage, setPreviewImage] = useState('');
+    const [previewImageError, setPreviewImageError] = useState('');
     const previewSvg = withSvgViewBox(cuttingData.svg, cuttingData);
     const hasValidSvg = isSafeSvg(previewSvg);
     const hasPlacements = cuttingData.placedParts.length > 0;
+    const hasWorkpieces = cuttingData.workpieces.some(
+        (workpiece) => workpiece.details.length > 0
+    );
     const hasResponse = (cuttingData.responseKeys?.length ?? 0) > 0;
-    const hasResult = hasValidSvg || hasPlacements;
+    const hasResult = previewImage.length > 0 || hasValidSvg || hasPlacements;
+
+    useEffect(() => {
+        let objectUrl = '';
+        let isMounted = true;
+
+        setPreviewImage('');
+        setPreviewImageError('');
+
+        if (!hasWorkpieces) return undefined;
+
+        getPNG2DCuttingPreview(getPreviewRequestBody(cuttingData))
+            .then((url) => {
+                objectUrl = url;
+                if (isMounted) setPreviewImage(url);
+            })
+            .catch(() => {
+                if (isMounted) {
+                    setPreviewImageError('Не удалось загрузить PNG-превью раскроя.');
+                }
+            });
+
+        return () => {
+            isMounted = false;
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+        };
+    }, [cuttingData, hasWorkpieces]);
 
     return (
         <Flex className={styles.cutting2D} gap={24}>
@@ -218,7 +257,16 @@ export const Cutting2D = () => {
                                 Скачать DXF
                             </Button>
                         </Flex>
-                        {hasValidSvg ? (
+                        {previewImageError && (
+                            <Alert type='warning' showIcon message={previewImageError} />
+                        )}
+                        {previewImage ? (
+                            <Image
+                                className={styles.cutting2D__image}
+                                src={previewImage}
+                                preview={false}
+                            />
+                        ) : hasValidSvg ? (
                             <div
                                 className={styles.cutting2D__svg}
                                 dangerouslySetInnerHTML={{ __html: previewSvg }}

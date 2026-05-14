@@ -22,6 +22,28 @@ export const getPNG1DCutting = async (dataCalculate1D: string) => {
     }
 };
 
+
+export const getPNG2DCuttingPreview = async (dataCalculate2D: string) => {
+    try {
+        const response = await fetch(
+            `${import.meta.env.VITE_APP_BASE_URL}2d/export/result/png?preview=true`,
+            {
+                method: 'POST',
+                headers: headers,
+                body: dataCalculate2D,
+            }
+        );
+        if (!response.ok) {
+            throw new Error('Ошибка при получении данных.');
+        }
+        const blob = await response.blob();
+        return URL.createObjectURL(blob);
+    } catch (error) {
+        console.error('Ошибка при получении данных:', error);
+        throw error;
+    }
+};
+
 export const downloadFile1DCutting = async (
     dataCalculate1D: string,
     typeFile: 'pdf' | 'csv'
