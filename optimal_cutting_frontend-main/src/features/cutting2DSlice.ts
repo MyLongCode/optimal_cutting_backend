@@ -12,6 +12,7 @@ const initialState: Cutting2DNestingResult = {
     totalUtilization: 0,
     svg: '',
     dxf: '',
+    responseKeys: [],
 };
 
 const slice = createSlice({

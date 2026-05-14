@@ -34,6 +34,8 @@ type RawCutting2DNestingResult = Partial<Cutting2DNestingResult> & {
     TotalUtilization?: number;
     Svg?: string;
     Dxf?: string;
+    diagnostics?: unknown;
+    Diagnostics?: unknown;
 };
 
 const normalizePlacement = (placement: RawNestingPlacement): NestingPlacement => ({
@@ -71,6 +73,8 @@ const normalizeNestingResult = (
     totalUtilization: response.totalUtilization ?? response.TotalUtilization ?? 0,
     svg: response.svg ?? response.Svg ?? '',
     dxf: response.dxf ?? response.Dxf ?? '',
+    diagnostics: response.diagnostics ?? response.Diagnostics,
+    responseKeys: Object.keys(response),
 });
 
 export const cutting2DApi = api.injectEndpoints({

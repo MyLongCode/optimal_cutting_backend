@@ -51,4 +51,6 @@ export type Cutting2DNestingResult = {
     totalUtilization: number;
     svg: string;
     dxf: string;
+    diagnostics?: unknown;
+    responseKeys?: string[];
 };
