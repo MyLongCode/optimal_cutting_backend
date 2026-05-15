@@ -328,7 +328,9 @@ export const Cutting2D = () => {
 
     return (
         <Flex className={styles.cutting2D}>
-            <Cutting2DForm />
+            <FormContainer>
+                <Cutting2DForm />
+            </FormContainer>
             <Flex vertical className={styles.cutting2D__result}>
                 {hasResult ? (
                     <>
