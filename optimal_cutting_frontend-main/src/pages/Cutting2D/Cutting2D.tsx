@@ -5,7 +5,6 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCalculateData2D } from '../../features/cutting2DSlice';
 import { Cutting2DNestingResult, NestingOutputPoint } from '../../types/Nesting2D';
 import { getPNG2DCuttingPreview } from '../../functions/fetchFiles';
-import { FormContainer } from '../../components/FormContainer/FormContainer';
 import { CuttingDownloadPanel } from '../../components/CuttingDownloadPanel/CuttingDownloadPanel';
 import styles from './Cutting2D.module.css';
 
@@ -37,10 +36,21 @@ const getPreviewSize = (cuttingData: Cutting2DNestingResult) => {
     };
 };
 
-const isSafeSvg = (svg: string) => svg.trimStart().startsWith('<svg');
+const getSvgMarkup = (svg: string) => {
+    const trimmedSvg = svg.trim();
+    const svgStart = trimmedSvg.indexOf('<svg');
+    const svgEnd = trimmedSvg.lastIndexOf('</svg>');
+
+    if (svgStart === -1) return '';
+    if (svgEnd === -1) return trimmedSvg.slice(svgStart);
+
+    return trimmedSvg.slice(svgStart, svgEnd + '</svg>'.length);
+};
+
+const isSafeSvg = (svg: string) => getSvgMarkup(svg).startsWith('<svg');
 
 const withSvgViewBox = (svg: string, cuttingData: Cutting2DNestingResult) => {
-    const normalizedSvg = svg.trim();
+    const normalizedSvg = getSvgMarkup(svg);
 
     if (!isSafeSvg(normalizedSvg) || normalizedSvg.includes('viewBox=')) {
         return normalizedSvg;
