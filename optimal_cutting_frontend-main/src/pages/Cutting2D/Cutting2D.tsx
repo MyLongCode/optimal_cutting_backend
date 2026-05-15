@@ -207,9 +207,9 @@ export const Cutting2D = () => {
     }, [cuttingData, hasWorkpieces]);
 
     return (
-        <Flex className={styles.cutting2D} gap={24}>
+        <Flex className={styles.cutting2D}>
             <Cutting2DForm />
-            <Flex vertical className={styles.cutting2D__result} gap={16}>
+            <Flex vertical className={styles.cutting2D__result}>
                 {hasResult ? (
                     <>
                         <Card className={styles.cutting2D__summary}>
