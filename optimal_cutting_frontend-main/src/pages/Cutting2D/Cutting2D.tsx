@@ -6,6 +6,7 @@ import { selectCalculateData2D } from '../../features/cutting2DSlice';
 import { Cutting2DNestingResult, NestingOutputPoint } from '../../types/Nesting2D';
 import { getPNG2DCuttingPreview } from '../../functions/fetchFiles';
 import { CuttingDownloadPanel } from '../../components/CuttingDownloadPanel/CuttingDownloadPanel';
+import { FormContainer } from '../../components/FormContainer/FormContainer';
 import styles from './Cutting2D.module.css';
 
 const DEFAULT_PREVIEW_SIZE = 1000;
