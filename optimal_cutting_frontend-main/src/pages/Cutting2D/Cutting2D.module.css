@@ -1,11 +1,14 @@
 .cutting2D {
     width: 100%;
-    min-height: 100%;
+    height: 100%;
 }
 
 .cutting2D__result {
     width: 100%;
-    overflow: auto;
+    padding: 40px 100px;
+    gap: 66px;
+    max-height: max-content;
+    overflow-y: auto;
 }
 
 .cutting2D__summary {
@@ -30,7 +33,6 @@
     color: rgba(0, 0, 0, 0.45);
     background-color: var(--white);
 }
-
 
 .cutting2D__image {
     width: 100%;
