@@ -1,10 +1,11 @@
-import { Alert, Button, Card, Flex, Image, Typography } from 'antd';
+import { Alert, Button, Flex, Image, Table, Typography } from 'antd';
 import { Cutting2DForm } from '../../components/forms/Cutting2DForm/Cutting2DForm';
 import { useEffect, useState } from 'react';
 import { useAppSelector } from '../../app/hooks';
 import { selectCalculateData2D } from '../../features/cutting2DSlice';
 import { Cutting2DNestingResult, NestingOutputPoint } from '../../types/Nesting2D';
 import { getPNG2DCuttingPreview } from '../../functions/fetchFiles';
+import { CuttingDownloadPanel } from '../../components/CuttingDownloadPanel/CuttingDownloadPanel';
 import styles from './Cutting2D.module.css';
 
 const DEFAULT_PREVIEW_SIZE = 1000;
@@ -35,10 +36,21 @@ const getPreviewSize = (cuttingData: Cutting2DNestingResult) => {
     };
 };
 
-const isSafeSvg = (svg: string) => svg.trimStart().startsWith('<svg');
+const getSvgMarkup = (svg: string) => {
+    const trimmedSvg = svg.trim();
+    const svgStart = trimmedSvg.indexOf('<svg');
+    const svgEnd = trimmedSvg.lastIndexOf('</svg>');
+
+    if (svgStart === -1) return '';
+    if (svgEnd === -1) return trimmedSvg.slice(svgStart);
+
+    return trimmedSvg.slice(svgStart, svgEnd + '</svg>'.length);
+};
+
+const isSafeSvg = (svg: string) => getSvgMarkup(svg).startsWith('<svg');
 
 const withSvgViewBox = (svg: string, cuttingData: Cutting2DNestingResult) => {
-    const normalizedSvg = svg.trim();
+    const normalizedSvg = getSvgMarkup(svg);
 
     if (!isSafeSvg(normalizedSvg) || normalizedSvg.includes('viewBox=')) {
         return normalizedSvg;
@@ -112,33 +124,141 @@ const FallbackPlacementPreview = ({ cuttingData }: { cuttingData: Cutting2DNesti
     );
 };
 
-const PlacementTable = ({ cuttingData }: { cuttingData: Cutting2DNestingResult }) => (
-    <div className={styles.cutting2D__placements}>
-        <Typography.Title level={5}>Данные размещения</Typography.Title>
-        <table>
-            <thead>
-                <tr>
-                    <th>Деталь</th>
-                    <th>Лист</th>
-                    <th>X</th>
-                    <th>Y</th>
-                    <th>Поворот</th>
-                </tr>
-            </thead>
-            <tbody>
-                {cuttingData.placedParts.map((part, index) => (
-                    <tr key={`${part.sheetId}-${part.partId}-${index}`}>
-                        <td>{part.partId}</td>
-                        <td>{part.sheetId}</td>
-                        <td>{part.x.toFixed(2)}</td>
-                        <td>{part.y.toFixed(2)}</td>
-                        <td>{part.rotation}°</td>
-                    </tr>
-                ))}
-            </tbody>
-        </table>
-    </div>
+const Cutting2DDownload = ({
+    hasValidSvg,
+    previewSvg,
+    dxf,
+}: {
+    hasValidSvg: boolean;
+    previewSvg: string;
+    dxf: string;
+}) => (
+    <CuttingDownloadPanel>
+        <Button
+            type='primary'
+            danger
+            disabled={!hasValidSvg}
+            onClick={() => downloadTextFile(previewSvg, 'cutting-2d.svg', 'image/svg+xml')}
+        >
+            Скачать SVG
+        </Button>
+        <Button
+            danger
+            disabled={!dxf}
+            onClick={() => downloadTextFile(dxf, 'cutting-2d.dxf', 'application/dxf')}
+        >
+            Скачать DXF
+        </Button>
+    </CuttingDownloadPanel>
 );
+
+const SchemePreview = ({
+    cuttingData,
+    hasValidSvg,
+    previewImage,
+    previewSvg,
+}: {
+    cuttingData: Cutting2DNestingResult;
+    hasValidSvg: boolean;
+    previewImage: string;
+    previewSvg: string;
+}) => (
+    <Flex className={styles.cutting2D__scheme} align='center' justify='center'>
+        {hasValidSvg ? (
+            <div
+                className={styles.cutting2D__svg}
+                dangerouslySetInnerHTML={{ __html: previewSvg }}
+            />
+        ) : previewImage ? (
+            <Image className={styles.cutting2D__image} src={previewImage} preview={false} />
+        ) : (
+            <Flex vertical className={styles.cutting2D__fallback}>
+                <Typography.Text type='secondary'>
+                    SVG в ответе отсутствует или имеет неожиданный формат. Показываем данные
+                    размещения по placedParts.
+                </Typography.Text>
+                <FallbackPlacementPreview cuttingData={cuttingData} />
+            </Flex>
+        )}
+    </Flex>
+);
+
+const ResultSummary = ({ cuttingData }: { cuttingData: Cutting2DNestingResult }) => {
+    const sheetRows = Object.entries(cuttingData.utilizationBySheet).map(
+        ([sheetId, usage], index) => ({
+            key: sheetId,
+            number: index + 1,
+            sheetId,
+            usage: `${usage.toFixed(2)}%`,
+        })
+    );
+
+    const placementRows = cuttingData.placedParts.map((part, index) => ({
+        key: `${part.sheetId}-${part.partId}-${index}`,
+        partId: part.partId,
+        sheetId: part.sheetId,
+        x: part.x.toFixed(2),
+        y: part.y.toFixed(2),
+        rotation: `${part.rotation}°`,
+    }));
+
+    const summaryRows = [
+        { label: 'К-во листов', value: cuttingData.sheets.length || sheetRows.length },
+        { label: 'Использование', value: `${cuttingData.totalUtilization.toFixed(2)}%` },
+        { label: 'Размещено деталей', value: cuttingData.placedParts.length },
+        { label: 'Не размещено деталей', value: cuttingData.unplacedParts.length },
+    ];
+
+    return (
+        <Flex vertical className={styles['table-result']}>
+            <Flex className={styles['table-result__title']}>Результат</Flex>
+            <Flex vertical className={styles.cutting2D__summaryList}>
+                {summaryRows.map((row) => (
+                    <Flex key={row.label} className={styles['table-result__count-workpiece']}>
+                        {`${row.label} = ${row.value}`}
+                    </Flex>
+                ))}
+            </Flex>
+
+            {sheetRows.length > 0 && (
+                <Table
+                    columns={[
+                        { title: 'Лист', dataIndex: 'number', key: 'number' },
+                        { title: 'ID листа', dataIndex: 'sheetId', key: 'sheetId' },
+                        { title: 'Использование', dataIndex: 'usage', key: 'usage' },
+                    ]}
+                    dataSource={sheetRows}
+                    pagination={false}
+                    className={styles.cutting2D__table}
+                />
+            )}
+
+            <Table
+                columns={[
+                    { title: 'Деталь', dataIndex: 'partId', key: 'partId' },
+                    { title: 'Лист', dataIndex: 'sheetId', key: 'sheetId' },
+                    { title: 'X', dataIndex: 'x', key: 'x' },
+                    { title: 'Y', dataIndex: 'y', key: 'y' },
+                    { title: 'Поворот', dataIndex: 'rotation', key: 'rotation' },
+                ]}
+                dataSource={placementRows}
+                pagination={false}
+                className={styles.cutting2D__table}
+            />
+
+            {cuttingData.unplacedParts.length > 0 && (
+                <Flex vertical className={styles.cutting2D__unplaced}>
+                    <Typography.Text className={styles.cutting2D__unplacedTitle}>
+                        Не удалось разместить детали:
+                    </Typography.Text>
+                    <Typography.Text type='warning'>
+                        {cuttingData.unplacedParts.join(', ')}
+                    </Typography.Text>
+                </Flex>
+            )}
+        </Flex>
+    );
+};
 
 const DebugResponseMessage = ({ cuttingData }: { cuttingData: Cutting2DNestingResult }) => {
     const keys = cuttingData.responseKeys ?? [];
@@ -212,75 +332,16 @@ export const Cutting2D = () => {
             <Flex vertical className={styles.cutting2D__result}>
                 {hasResult ? (
                     <>
-                        <Card className={styles.cutting2D__summary}>
-                            <Flex gap={24} wrap='wrap'>
-                                <Typography.Text>
-                                    Размещено: {cuttingData.placedParts.length}
-                                </Typography.Text>
-                                <Typography.Text>
-                                    Не размещено: {cuttingData.unplacedParts.length}
-                                </Typography.Text>
-                                <Typography.Text>
-                                    Использование: {cuttingData.totalUtilization.toFixed(2)}%
-                                </Typography.Text>
-                            </Flex>
-                            {cuttingData.unplacedParts.length > 0 && (
-                                <Typography.Text type='warning'>
-                                    Не удалось разместить детали:{' '}
-                                    {cuttingData.unplacedParts.join(', ')}
-                                </Typography.Text>
-                            )}
-                        </Card>
-                        <Flex gap={12}>
-                            <Button
-                                disabled={!hasValidSvg}
-                                onClick={() =>
-                                    downloadTextFile(
-                                        previewSvg,
-                                        'cutting-2d.svg',
-                                        'image/svg+xml'
-                                    )
-                                }
-                            >
-                                Скачать SVG
-                            </Button>
-                            <Button
-                                disabled={!cuttingData.dxf}
-                                onClick={() =>
-                                    downloadTextFile(
-                                        cuttingData.dxf,
-                                        'cutting-2d.dxf',
-                                        'application/dxf'
-                                    )
-                                }
-                            >
-                                Скачать DXF
-                            </Button>
-                        </Flex>
+                        <SchemePreview
+                            cuttingData={cuttingData}
+                            hasValidSvg={hasValidSvg}
+                            previewImage={previewImage}
+                            previewSvg={previewSvg}
+                        />
                         {previewImageError && (
                             <Alert type='warning' showIcon message={previewImageError} />
                         )}
-                        {previewImage ? (
-                            <Image
-                                className={styles.cutting2D__image}
-                                src={previewImage}
-                                preview={false}
-                            />
-                        ) : hasValidSvg ? (
-                            <div
-                                className={styles.cutting2D__svg}
-                                dangerouslySetInnerHTML={{ __html: previewSvg }}
-                            />
-                        ) : (
-                            <Card className={styles.cutting2D__fallback}>
-                                <Typography.Text type='secondary'>
-                                    SVG в ответе отсутствует или имеет неожиданный формат.
-                                    Показываем данные размещения по placedParts.
-                                </Typography.Text>
-                                <FallbackPlacementPreview cuttingData={cuttingData} />
-                                <PlacementTable cuttingData={cuttingData} />
-                            </Card>
-                        )}
+                        <ResultSummary cuttingData={cuttingData} />
                     </>
                 ) : hasResponse ? (
                     <DebugResponseMessage cuttingData={cuttingData} />
@@ -290,6 +351,13 @@ export const Cutting2D = () => {
                     </Flex>
                 )}
             </Flex>
+            {hasResult && (
+                <Cutting2DDownload
+                    hasValidSvg={hasValidSvg}
+                    previewSvg={previewSvg}
+                    dxf={cuttingData.dxf}
+                />
+            )}
         </Flex>
     );
 };

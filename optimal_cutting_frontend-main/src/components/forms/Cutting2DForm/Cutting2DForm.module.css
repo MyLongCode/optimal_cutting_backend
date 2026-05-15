@@ -11,8 +11,9 @@
     gap: 14px;
 }
 .cutting2D {
+    flex: 0 0 312px;
     height: 100%;
-    width: 100%;
+    width: 312px;
 }
 
 .cutting2D__input {

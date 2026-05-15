@@ -1,5 +1,5 @@
-import { Button, Flex } from 'antd';
-import styles from './Cutting1DDownload.module.css';
+import { Button } from 'antd';
+import { CuttingDownloadPanel } from '../CuttingDownloadPanel/CuttingDownloadPanel';
 import { selectCalculateData1D } from '../../features/cutting1DSlice';
 import { useAppSelector } from '../../app/hooks';
 import { downloadFile1DCutting } from '../../functions/fetchFiles';
@@ -16,13 +16,13 @@ export const Cutting1DDownload = () => {
     };
 
     return (
-        <Flex vertical className={styles['cutting-1D-download']}>
+        <CuttingDownloadPanel>
             <Button type='primary' danger onClick={() => handlerDownloadPDF()}>
                 Скачать схему pdf
             </Button>
             <Button danger onClick={() => handlerDownloadCSV()}>
                 Скачать схему csv
             </Button>
-        </Flex>
+        </CuttingDownloadPanel>
     );
 };

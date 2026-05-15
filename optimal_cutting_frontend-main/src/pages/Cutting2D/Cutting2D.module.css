@@ -11,70 +11,91 @@
     overflow-y: auto;
 }
 
-.cutting2D__summary {
+.cutting2D__scheme {
     width: 100%;
+    min-height: 420px;
+    padding: 24px;
+    overflow: auto;
+    background-color: var(--white);
 }
 
 .cutting2D__svg {
     width: 100%;
-    overflow: auto;
-    padding: 16px;
-    background-color: var(--white);
+    display: flex;
+    justify-content: center;
 }
 
 .cutting2D__svg svg {
-    max-width: 100%;
+    width: 100%;
+    max-height: 640px;
     height: auto;
+}
+
+.cutting2D__image {
+    width: 100%;
+}
+
+.cutting2D__image img {
+    width: 100%;
+    height: auto;
+}
+
+.cutting2D__fallback {
+    width: 100%;
+    gap: 16px;
+}
+
+.cutting2D__fallbackSvg {
+    width: 100%;
+    max-height: 640px;
+    padding: 16px;
+    overflow: visible;
+    background-color: var(--white);
+    border: 1px solid var(--btn-border-grey);
+}
+
+.cutting2D__fallbackPart {
+    fill: rgba(24, 144, 255, 0.2);
+    stroke: var(--primary);
+    stroke-width: 1;
 }
 
 .cutting2D__empty {
     min-height: 360px;
     padding: 24px;
-    color: rgba(0, 0, 0, 0.45);
+    color: var(--font-grey);
     background-color: var(--white);
 }
 
-.cutting2D__image {
-    width: 100%;
-    padding: 16px;
-    background-color: var(--white);
-}
-
-.cutting2D__fallback {
+.table-result {
     width: 100%;
 }
 
-.cutting2D__fallbackSvg {
-    width: 100%;
-    max-height: 520px;
-    margin-top: 16px;
-    padding: 16px;
-    overflow: visible;
-    background-color: var(--white);
-    border: 1px solid rgba(0, 0, 0, 0.08);
+.table-result__title {
+    font-size: 28px;
+    margin-bottom: 20px;
 }
 
-.cutting2D__fallbackPart {
-    fill: rgba(0, 128, 255, 0.2);
-    stroke: #0080ff;
-    stroke-width: 1;
+.table-result__count-workpiece {
+    font-size: 20px;
+    margin-bottom: 5px;
 }
 
-.cutting2D__placements {
-    margin-top: 16px;
-    overflow: auto;
+.cutting2D__summaryList {
+    margin-bottom: 15px;
 }
 
-.cutting2D__placements table {
-    width: 100%;
-    border-collapse: collapse;
+.cutting2D__table {
+    margin-top: 15px;
 }
 
-.cutting2D__placements th,
-.cutting2D__placements td {
-    padding: 8px;
-    text-align: left;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+.cutting2D__unplaced {
+    margin-top: 20px;
+    gap: 5px;
+}
+
+.cutting2D__unplacedTitle {
+    font-size: 20px;
 }
 
 .cutting2D__debug {
