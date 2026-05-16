@@ -16,28 +16,28 @@
     min-height: 420px;
     padding: 24px;
     overflow: auto;
-    background-color: var(--white);
+    background-color: var(--background-header-table);
+    border: 1px solid var(--btn-border-grey);
 }
 
 .cutting2D__svg {
+    display: block;
     width: 100%;
-    display: flex;
-    justify-content: center;
+    max-width: 100%;
 }
 
 .cutting2D__svg svg {
+    display: block;
     width: 100%;
-    max-height: 640px;
+    max-width: 100%;
     height: auto;
 }
 
 .cutting2D__image {
-    width: 100%;
-}
-
-.cutting2D__image img {
-    width: 100%;
+    display: block;
+    max-width: 100%;
     height: auto;
+    object-fit: contain;
 }
 
 .cutting2D__fallback {
@@ -46,8 +46,10 @@
 }
 
 .cutting2D__fallbackSvg {
+    display: block;
     width: 100%;
-    max-height: 640px;
+    max-width: 100%;
+    height: auto;
     padding: 16px;
     overflow: visible;
     background-color: var(--white);
