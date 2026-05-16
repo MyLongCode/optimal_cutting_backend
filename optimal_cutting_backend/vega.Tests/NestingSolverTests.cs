@@ -1,3 +1,9 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using SkiaSharp;
+using vega.Controllers;
+using vega.Migrations.DAL;
+using vega.Services.Interfaces;
 using NetTopologySuite.Geometries;
 using System.Text.Json;
 using vega.Controllers.DTO.Nesting;
@@ -178,6 +184,87 @@ public class NestingSolverTests
         Assert.NotEmpty(exportPayload.Workpieces[0].Details);
     }
 
+
+    [Fact]
+    public void NestingSvg_ShouldUseInvariantDecimalsAndPositiveViewBox()
+    {
+        var dto = new Cutting2DNestingDTO
+        {
+            Scale = 10,
+            Kerf = 0,
+            Clearance = 0,
+            Sheets =
+            [
+                new NestingSheetDto
+                {
+                    Id = "S1",
+                    Outer = [[new() { X = 0, Y = 0 }, new() { X = 111.1, Y = 0 }, new() { X = 111.1, Y = 111.1 }, new() { X = 0, Y = 111.1 }]]
+                }
+            ],
+            Parts =
+            [
+                new NestingPartDto
+                {
+                    Id = "P",
+                    Quantity = 1,
+                    Outer = [[new() { X = 0, Y = 0 }, new() { X = 10.5, Y = 0 }, new() { X = 10.5, Y = 10.5 }, new() { X = 0, Y = 10.5 }]]
+                }
+            ],
+            AllowedRotationsDegrees = [0]
+        };
+
+        var result = CreateService().Nest(dto);
+
+        Assert.StartsWith("<svg", result.Svg);
+        Assert.Contains("width='111.1'", result.Svg);
+        Assert.Contains("height='111.1'", result.Svg);
+        Assert.Contains("viewBox='0 0 111.1 111.1'", result.Svg);
+        Assert.Contains("10.5", result.Svg);
+        Assert.DoesNotContain("-111.1", result.Svg);
+        Assert.DoesNotContain("10,5", result.Svg);
+    }
+
+    [Fact]
+    public async Task Draw2DCuttingAsync_ShouldUseWorkpieceSizeForPreviewCanvas()
+    {
+        var result = new Cutting2DResult
+        {
+            Workpieces =
+            [
+                new Workpiece2D
+                {
+                    Width = 1111,
+                    Height = 1111,
+                    Details = [new Detail2D { X = 0, Y = 0, Width = 10, Height = 10 }]
+                }
+            ]
+        };
+
+        var images = await new DrawService().Draw2DCuttingAsync(result);
+        using var bitmap = SKBitmap.Decode(images[0]);
+
+        Assert.Equal(1111, bitmap.Width);
+        Assert.Equal(1111, bitmap.Height);
+    }
+
+    [Fact]
+    public async Task ExportPng_ShouldReturnPngPreviewAndZipExport()
+    {
+        var controller = new FileController(
+            new StubCsvService(),
+            new StubDrawService(),
+            new StubDxfService(),
+            null!,
+            new HttpContextAccessor());
+        var payload = new Cutting2DResult { Workpieces = [new Workpiece2D { Width = 10, Height = 10 }] };
+
+        var preview = Assert.IsType<FileContentResult>(await controller.ExportPng(payload, preview: true));
+        var export = Assert.IsType<FileContentResult>(await controller.ExportPng(payload, preview: false));
+
+        Assert.Equal("image/png", preview.ContentType);
+        Assert.Equal("application/zip", export.ContentType);
+    }
+
     [Fact]
     public void ZeroGap_ShouldAllowPartsToShareCutLineWithoutOverlap()
     {
@@ -217,4 +304,26 @@ public class NestingSolverTests
     private static PolygonNestingService CreateService()
         => new(new GeometryNormalizer(), new PolygonValidator(), new NestingSolver(new NfpService(), new PlacementCandidateGenerator()));
 
+}
+
+public sealed class StubDrawService : IDrawService
+{
+    public Task<byte[]> DrawDXFAsync(List<Figure> figures) => Task.FromResult(Array.Empty<byte>());
+    public Task<byte[]> Draw1DCuttingAsync(Cutting1DResult result) => Task.FromResult(Array.Empty<byte>());
+    public Task<List<byte[]>> Draw2DCuttingAsync(Cutting2DResult result) => Task.FromResult(new List<byte[]> { new byte[] { 1, 2, 3 } });
+    public Task<List<byte[]>> DrawDXFCuttingAsync(Cutting2DResult result) => Task.FromResult(new List<byte[]>());
+    public Task<List<byte[]>> DrawDXFCuttingForPDF(Cutting2DResult result) => Task.FromResult(new List<byte[]>());
+}
+
+public sealed class StubCsvService : ICSVService
+{
+    public IEnumerable<T> ReadCSV<T>(Stream file) => [];
+    public byte[] WriteCSV<T>(IEnumerable<T> items) => [];
+}
+
+public sealed class StubDxfService : IDXFService
+{
+    public Task<List<Figure>> GetDXFAsync(byte[] fileBytes) => Task.FromResult(new List<Figure>());
+    public Task<List<byte[]>> CreateDXFAsync(Cutting2DResult result) => Task.FromResult(new List<byte[]>());
+    public Task<List<byte[]>> Create2DDXFAsync(Cutting2DResult result) => Task.FromResult(new List<byte[]>());
 }

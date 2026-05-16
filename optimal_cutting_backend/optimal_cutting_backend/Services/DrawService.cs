@@ -1,4 +1,4 @@
-﻿
+
 using System.Globalization;
 using SkiaSharp;
 using vega.Controllers.DTO;
@@ -77,13 +77,21 @@ namespace vega.Services
 
             foreach (var workpiece in result.Workpieces)
             {
-                var width = Math.Max(1, workpiece.Width);
-                var height = Math.Max(1, workpiece.Height);
+                var (width, height) = Get2DCanvasSize(workpiece);
                 using var bitmap = new SKBitmap(width, height);
                 using var canvas = new SKCanvas(bitmap);
                 canvas.Clear(SKColors.White);
                 canvas.Translate(0, height);
                 canvas.Scale(1, -1);
+
+                using var sheetBorderPaint = new SKPaint
+                {
+                    Color = SKColors.DarkGray,
+                    Style = SKPaintStyle.Stroke,
+                    StrokeWidth = 1,
+                    IsAntialias = true
+                };
+                canvas.DrawRect(new SKRect(0, 0, width, height), sheetBorderPaint);
 
                 foreach (var detail in workpiece.Details)
                 {
@@ -106,6 +114,28 @@ namespace vega.Services
             }
 
             return images;
+        }
+
+        private static (int Width, int Height) Get2DCanvasSize(Workpiece2D workpiece)
+        {
+            var maxX = (double)Math.Max(1, workpiece.Width);
+            var maxY = (double)Math.Max(1, workpiece.Height);
+
+            foreach (var detail in workpiece.Details)
+            {
+                maxX = Math.Max(maxX, detail.X + detail.Width);
+                maxY = Math.Max(maxY, detail.Y + detail.Height);
+
+                if (detail.Contour == null) continue;
+
+                foreach (var point in detail.Contour.FilledContours.Concat(detail.Contour.HoleContours).SelectMany(c => c))
+                {
+                    maxX = Math.Max(maxX, point.X);
+                    maxY = Math.Max(maxY, point.Y);
+                }
+            }
+
+            return (Math.Max(1, (int)Math.Ceiling(maxX)), Math.Max(1, (int)Math.Ceiling(maxY)));
         }
 
         private static void DrawDetail2D(SKCanvas canvas, Detail2D detail, SKPaint borderPaint, SKPaint fillPaint)
