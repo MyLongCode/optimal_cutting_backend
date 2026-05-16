@@ -95,6 +95,8 @@ builder.Services.AddScoped<IPolygonValidator, PolygonValidator>();
 builder.Services.AddScoped<INfpService, NfpService>();
 builder.Services.AddScoped<IPlacementCandidateGenerator, PlacementCandidateGenerator>();
 builder.Services.AddScoped<INestingSolver, NestingSolver>();
+builder.Services.AddScoped<IPartShapeClassifier, PartShapeClassifier>();
+builder.Services.AddScoped<IRectangleNestingSolver, RectangleNestingSolver>();
 builder.Services.AddScoped<IPolygonNestingService, PolygonNestingService>();
 
 var app = builder.Build();

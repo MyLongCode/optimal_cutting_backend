@@ -302,7 +302,12 @@ public class NestingSolverTests
     }
 
     private static PolygonNestingService CreateService()
-        => new(new GeometryNormalizer(), new PolygonValidator(), new NestingSolver(new NfpService(), new PlacementCandidateGenerator()));
+        => new(
+            new GeometryNormalizer(),
+            new PolygonValidator(),
+            new NestingSolver(new NfpService(), new PlacementCandidateGenerator()),
+            new PartShapeClassifier(),
+            new RectangleNestingSolver());
 
 }
 

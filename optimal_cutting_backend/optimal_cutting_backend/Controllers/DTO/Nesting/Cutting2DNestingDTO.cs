@@ -8,6 +8,7 @@ public class Cutting2DNestingDTO
     public double Clearance { get; set; }
     public int Scale { get; set; } = 1000;
     public bool EnableLocalSearch { get; set; }
+    public bool EnableRectangleFastPath { get; set; } = true;
     public List<int>? AllowedRotationsDegrees { get; set; }
 }
 

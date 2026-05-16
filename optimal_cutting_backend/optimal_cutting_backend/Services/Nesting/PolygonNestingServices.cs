@@ -150,15 +150,46 @@ public class NestingSolver : INestingSolver
 
     public NestingSolver(INfpService nfp, IPlacementCandidateGenerator candidates) { _nfp = nfp; _candidates = candidates; }
 
-    public NestingResult Solve(List<NormalizedPolygon> sheets, List<NormalizedPolygon> parts, double kerf, double clearance, bool localSearch, IReadOnlyList<int>? rotations = null)
+    public NestingResult Solve(
+        List<NormalizedPolygon> sheets,
+        List<NormalizedPolygon> parts,
+        double kerf,
+        double clearance,
+        bool localSearch,
+        IReadOnlyList<int>? rotations = null,
+        Dictionary<string, List<Geometry>>? initialPlacedBySheet = null,
+        List<NestingPlacement>? initialPlacements = null)
     {
         var res = new NestingResult { Sheets = sheets.Select(s => s.Id).ToList() };
+        if (initialPlacements != null)
+        {
+            res.PlacedParts.AddRange(initialPlacements.Select(ClonePlacement));
+        }
+
         var gap = Math.Max(0, kerf + clearance);
         var angles = (rotations is { Count: > 0 } ? rotations : new[] { 0, 90, 180, 270 })
             .Select(NormalizeAngle)
             .Distinct()
             .ToList();
-        var placedBySheet = sheets.ToDictionary(s => s.Id, _ => new List<Geometry>());
+        var placedBySheet = sheets.ToDictionary(
+            s => s.Id,
+            s => initialPlacedBySheet != null && initialPlacedBySheet.TryGetValue(s.Id, out var initial)
+                ? initial.Select(g => (Geometry)g.Copy()).ToList()
+                : new List<Geometry>());
+
+        foreach (var placement in res.PlacedParts.Where(p => p.TransformedGeometry != null))
+        {
+            if (!placedBySheet.TryGetValue(placement.SheetId, out var placed))
+            {
+                continue;
+            }
+
+            var alreadyPresent = placed.Any(g => ReferenceEquals(g, placement.TransformedGeometry) || g.EqualsExact(placement.TransformedGeometry));
+            if (!alreadyPresent)
+            {
+                placed.Add((Geometry)placement.TransformedGeometry!.Copy());
+            }
+        }
 
         foreach (var part in parts.OrderByDescending(p => p.Polygon.Area))
         {
@@ -658,8 +689,26 @@ public class NestingSolver : INestingSolver
 
 public class PolygonNestingService : IPolygonNestingService
 {
-    private readonly IGeometryNormalizer _normalizer; private readonly IPolygonValidator _validator; private readonly INestingSolver _solver;
-    public PolygonNestingService(IGeometryNormalizer n, IPolygonValidator v, INestingSolver s) { _normalizer=n; _validator=v; _solver=s; }
+    private readonly IGeometryNormalizer _normalizer;
+    private readonly IPolygonValidator _validator;
+    private readonly INestingSolver _solver;
+    private readonly IPartShapeClassifier _shapeClassifier;
+    private readonly IRectangleNestingSolver _rectangleSolver;
+
+    public PolygonNestingService(
+        IGeometryNormalizer normalizer,
+        IPolygonValidator validator,
+        INestingSolver solver,
+        IPartShapeClassifier shapeClassifier,
+        IRectangleNestingSolver rectangleSolver)
+    {
+        _normalizer = normalizer;
+        _validator = validator;
+        _solver = solver;
+        _shapeClassifier = shapeClassifier;
+        _rectangleSolver = rectangleSolver;
+    }
+
     public NestingResult Nest(Cutting2DNestingDTO dto)
     {
         if (dto.Scale <= 0) throw new ArgumentException("scale must be greater than zero");
@@ -668,16 +717,108 @@ public class PolygonNestingService : IPolygonNestingService
         var parts = dto.Parts.SelectMany(p => Enumerable.Range(0, p.Quantity).Select(i => _normalizer.Normalize($"{p.Id}_{i+1}", p.Outer, p.Holes, dto.Scale, false))).ToList();
         sheets.ForEach(s => _validator.ValidatePolygon(s.Polygon, s.Id));
         parts.ForEach(p => _validator.ValidatePolygon(p.Polygon, p.Id));
-        var res = _solver.Solve(sheets, parts, dto.Kerf * dto.Scale, dto.Clearance * dto.Scale, dto.EnableLocalSearch, dto.AllowedRotationsDegrees);
 
-        var outputSheets = sheets.Select(s => s with { Polygon = (Polygon)ScaleGeometry(s.Polygon, 1.0 / dto.Scale) }).ToList();
+        var kerf = dto.Kerf * dto.Scale;
+        var clearance = dto.Clearance * dto.Scale;
+        var gap = Math.Max(0, kerf + clearance);
+        var rotations = dto.AllowedRotationsDegrees is { Count: > 0 }
+            ? dto.AllowedRotationsDegrees
+            : new List<int> { 0, 90, 180, 270 };
+
+        var res = dto.EnableRectangleFastPath
+            ? SolveWithRectangleFastPath(sheets, parts, kerf, clearance, gap, dto.EnableLocalSearch, rotations)
+            : _solver.Solve(sheets, parts, kerf, clearance, dto.EnableLocalSearch, dto.AllowedRotationsDegrees);
+
+        return BuildOutput(res, sheets, dto.Scale);
+    }
+
+    private NestingResult SolveWithRectangleFastPath(
+        List<NormalizedPolygon> sheets,
+        List<NormalizedPolygon> parts,
+        double kerf,
+        double clearance,
+        double gap,
+        bool localSearch,
+        IReadOnlyList<int> rotations)
+    {
+        var classifiedSheets = sheets.Select(_shapeClassifier.Classify).ToList();
+        if (classifiedSheets.Any(s => s.Kind != NestingShapeKind.Rectangle))
+        {
+            return _solver.Solve(sheets, parts, kerf, clearance, localSearch, rotations);
+        }
+
+        var classifiedParts = parts.Select(_shapeClassifier.Classify).ToList();
+        var rectangles = classifiedParts.Where(p => p.Kind == NestingShapeKind.Rectangle).ToList();
+        var complexParts = classifiedParts.Where(p => p.Kind == NestingShapeKind.Complex).Select(p => p.Source).ToList();
+
+        if (rectangles.Count == 0)
+        {
+            return _solver.Solve(sheets, parts, kerf, clearance, localSearch, rotations);
+        }
+
+        var rectanglePlacements = _rectangleSolver.SolveRectangles(sheets, rectangles, gap, rotations);
+        var placedRectangleIds = rectanglePlacements.Select(p => p.PartId).ToHashSet(StringComparer.Ordinal);
+        var unplacedRectangleIds = rectangles
+            .Select(r => r.Source.Id)
+            .Where(id => !placedRectangleIds.Contains(id))
+            .ToList();
+
+        if (complexParts.Count == 0)
+        {
+            var result = new NestingResult
+            {
+                Sheets = sheets.Select(s => s.Id).ToList(),
+                PlacedParts = rectanglePlacements,
+                UnplacedParts = unplacedRectangleIds
+            };
+
+            PopulateUtilization(result, sheets);
+            return result;
+        }
+
+        var initialPlacedBySheet = rectanglePlacements
+            .Where(p => p.TransformedGeometry != null)
+            .GroupBy(p => p.SheetId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(p => (Geometry)p.TransformedGeometry!.Copy()).ToList());
+
+        var mixedResult = _solver.Solve(
+            sheets,
+            complexParts,
+            kerf,
+            clearance,
+            localSearch,
+            rotations,
+            initialPlacedBySheet,
+            rectanglePlacements);
+
+        mixedResult.UnplacedParts.AddRange(unplacedRectangleIds);
+        PopulateUtilization(mixedResult, sheets);
+        return mixedResult;
+    }
+
+    private static void PopulateUtilization(NestingResult result, List<NormalizedPolygon> sheets)
+    {
+        foreach (var sheet in sheets)
+        {
+            var area = result.PlacedParts.Where(p => p.SheetId == sheet.Id).Sum(p => p.TransformedGeometry?.Area ?? 0);
+            result.UtilizationBySheet[sheet.Id] = sheet.Polygon.Area == 0 ? 0 : area / sheet.Polygon.Area;
+        }
+
+        result.TotalUtilization = result.UtilizationBySheet.Count == 0 ? 0 : result.UtilizationBySheet.Values.Average();
+    }
+
+    private static NestingResult BuildOutput(NestingResult res, List<NormalizedPolygon> sheets, int scale)
+    {
+        var outputSheets = sheets.Select(s => s with { Polygon = (Polygon)ScaleGeometry(s.Polygon, 1.0 / scale) }).ToList();
         foreach (var placement in res.PlacedParts)
         {
-            placement.X /= dto.Scale;
-            placement.Y /= dto.Scale;
+            placement.X /= scale;
+            placement.Y /= scale;
             if (placement.TransformedGeometry != null)
             {
-                placement.TransformedGeometry = ScaleGeometry(placement.TransformedGeometry, 1.0 / dto.Scale);
+                placement.TransformedGeometry = ScaleGeometry(placement.TransformedGeometry, 1.0 / scale);
                 placement.Contours = BuildPlacementContours(placement.TransformedGeometry);
             }
         }
