@@ -1,5 +1,6 @@
 using Clipper2Lib;
 using NetTopologySuite.Geometries;
+using System.Globalization;
 using NetTopologySuite.Geometries.Utilities;
 using NetTopologySuite.Operation.Valid;
 using netDxf;
@@ -806,11 +807,47 @@ public class PolygonNestingService : IPolygonNestingService
 
     private static string BuildSvg(List<NormalizedPolygon> sheets, List<NestingPlacement> placements)
     {
-        var sb = new StringBuilder("<svg xmlns='http://www.w3.org/2000/svg'>");
+        var polygons = sheets.Select(s => s.Polygon)
+            .Concat(placements.Select(p => p.TransformedGeometry).OfType<Polygon>())
+            .ToList();
+
+        var bounds = polygons.Count == 0
+            ? new SvgBounds(0, 0, 1, 1)
+            : SvgBounds.FromPolygons(polygons);
+
+        var sb = new StringBuilder();
+        sb.Append($"<svg xmlns='http://www.w3.org/2000/svg' width='{Fmt(bounds.Width)}' height='{Fmt(bounds.Height)}' viewBox='{Fmt(bounds.MinX)} {Fmt(bounds.MinY)} {Fmt(bounds.Width)} {Fmt(bounds.Height)}' preserveAspectRatio='xMidYMid meet'>");
         foreach (var s in sheets) sb.Append(PathForPolygon(s.Polygon, "fill:none;stroke:#666;stroke-width:1"));
         foreach (var p in placements.Where(x => x.TransformedGeometry is Polygon)) sb.Append(PathForPolygon((Polygon)p.TransformedGeometry!, "fill:rgba(0,128,255,0.2);stroke:#0080ff;stroke-width:1"));
         sb.Append("</svg>");
         return sb.ToString();
+    }
+
+    private readonly record struct SvgBounds(double MinX, double MinY, double Width, double Height)
+    {
+        public static SvgBounds FromPolygons(IEnumerable<Polygon> polygons)
+        {
+            var minX = double.PositiveInfinity;
+            var minY = double.PositiveInfinity;
+            var maxX = double.NegativeInfinity;
+            var maxY = double.NegativeInfinity;
+
+            foreach (var polygon in polygons)
+            {
+                var env = polygon.EnvelopeInternal;
+                minX = Math.Min(minX, env.MinX);
+                minY = Math.Min(minY, env.MinY);
+                maxX = Math.Max(maxX, env.MaxX);
+                maxY = Math.Max(maxY, env.MaxY);
+            }
+
+            if (!double.IsFinite(minX) || !double.IsFinite(minY) || !double.IsFinite(maxX) || !double.IsFinite(maxY))
+            {
+                return new SvgBounds(0, 0, 1, 1);
+            }
+
+            return new SvgBounds(minX, minY, Math.Max(maxX - minX, 1), Math.Max(maxY - minY, 1));
+        }
     }
 
     private static string PathForPolygon(Polygon poly, string style)
@@ -821,5 +858,8 @@ public class PolygonNestingService : IPolygonNestingService
     }
 
     private static string RingToPath(Coordinate[] coords)
-        => "M " + string.Join(" L ", coords.Take(coords.Length - 1).Select(c => $"{c.X},{-c.Y}")) + " Z ";
+        => "M " + string.Join(" L ", coords.Take(coords.Length - 1).Select(c => $"{Fmt(c.X)},{Fmt(c.Y)}")) + " Z ";
+
+    private static string Fmt(double value)
+        => value.ToString("0.################", CultureInfo.InvariantCulture);
 }
