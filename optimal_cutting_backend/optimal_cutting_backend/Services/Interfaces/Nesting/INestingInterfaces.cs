@@ -27,7 +27,15 @@ public interface IPlacementCandidateGenerator
 
 public interface INestingSolver
 {
-    NestingResult Solve(List<NormalizedPolygon> sheets, List<NormalizedPolygon> parts, double kerf, double clearance, bool localSearch, IReadOnlyList<int>? rotations = null);
+    NestingResult Solve(
+        List<NormalizedPolygon> sheets,
+        List<NormalizedPolygon> parts,
+        double kerf,
+        double clearance,
+        bool localSearch,
+        IReadOnlyList<int>? rotations = null,
+        Dictionary<string, List<Geometry>>? initialPlacedBySheet = null,
+        List<NestingPlacement>? initialPlacements = null);
 }
 
 public interface IPolygonNestingService
