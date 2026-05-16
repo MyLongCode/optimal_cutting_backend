@@ -1,4 +1,4 @@
-import { Alert, Button, Flex, Image, Table, Typography } from 'antd';
+import { Alert, Button, Flex, Table, Typography } from 'antd';
 import { Cutting2DForm } from '../../components/forms/Cutting2DForm/Cutting2DForm';
 import { useEffect, useState } from 'react';
 import { useAppSelector } from '../../app/hooks';
@@ -52,18 +52,38 @@ const getSvgMarkup = (svg: string) => {
 
 const isSafeSvg = (svg: string) => getSvgMarkup(svg).startsWith('<svg');
 
+const getSvgDimension = (svg: string, attribute: 'width' | 'height', fallback: number) => {
+    const match = svg.match(new RegExp(`${attribute}\\s*=\\s*["']?([0-9]+(?:\\.[0-9]+)?)`, 'i'));
+    const value = match ? Number.parseFloat(match[1]) : Number.NaN;
+
+    return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+
 const withSvgViewBox = (svg: string, cuttingData: Cutting2DNestingResult) => {
     const normalizedSvg = getSvgMarkup(svg);
 
-    if (!isSafeSvg(normalizedSvg) || normalizedSvg.includes('viewBox=')) {
+    if (!isSafeSvg(normalizedSvg)) {
         return normalizedSvg;
     }
 
-    const { width, height } = getPreviewSize(cuttingData);
+    const hasViewBox = /viewBox\s*=/.test(normalizedSvg);
+    const hasPreserveAspectRatio = /preserveAspectRatio\s*=/.test(normalizedSvg);
+
+    if (hasViewBox && hasPreserveAspectRatio) {
+        return normalizedSvg;
+    }
+
+    const fallbackSize = getPreviewSize(cuttingData);
+    const width = getSvgDimension(normalizedSvg, 'width', fallbackSize.width);
+    const height = getSvgDimension(normalizedSvg, 'height', fallbackSize.height);
+    const viewBoxAttribute = hasViewBox ? '' : ` viewBox="0 0 ${width} ${height}"`;
+    const aspectRatioAttribute = hasPreserveAspectRatio
+        ? ''
+        : ' preserveAspectRatio="xMidYMid meet"';
 
     return normalizedSvg.replace(
-        '<svg ',
-        `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" `
+        /<svg\b/,
+        `<svg${viewBoxAttribute}${aspectRatioAttribute}`
     );
 };
 
@@ -177,7 +197,11 @@ const SchemePreview = ({
                 dangerouslySetInnerHTML={{ __html: previewSvg }}
             />
         ) : previewImage ? (
-            <Image className={styles.cutting2D__image} src={previewImage} preview={false} />
+            <img
+                className={styles.cutting2D__image}
+                src={previewImage}
+                alt='PNG-превью схемы 2D-раскроя'
+            />
         ) : (
             <Flex vertical className={styles.cutting2D__fallback}>
                 <Typography.Text type='secondary'>
