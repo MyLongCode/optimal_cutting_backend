@@ -16,9 +16,11 @@ const downloadTextFile = (content: string, filename: string, type: string) => {
     const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
+
     link.href = url;
     link.download = filename;
     link.click();
+
     URL.revokeObjectURL(url);
 };
 
@@ -58,9 +60,10 @@ const withSvgViewBox = (svg: string, cuttingData: Cutting2DNestingResult) => {
     }
 
     const { width, height } = getPreviewSize(cuttingData);
+
     return normalizedSvg.replace(
         '<svg ',
-        `<svg width="${width}" height="${height}" viewBox="0 -${height} ${width} ${height}" `
+        `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" `
     );
 };
 
@@ -77,7 +80,12 @@ const getContourBounds = (contours: { points: NestingOutputPoint[] }[]) => {
     const points = contours.flatMap((contour) => contour.points);
 
     if (points.length === 0) {
-        return { minX: 0, minY: 0, width: DEFAULT_PREVIEW_SIZE, height: DEFAULT_PREVIEW_SIZE };
+        return {
+            minX: 0,
+            minY: 0,
+            width: DEFAULT_PREVIEW_SIZE,
+            height: DEFAULT_PREVIEW_SIZE,
+        };
     }
 
     const xs = points.map((point) => point.x);
@@ -93,6 +101,37 @@ const getContourBounds = (contours: { points: NestingOutputPoint[] }[]) => {
         width: Math.max(maxX - minX, 1),
         height: Math.max(maxY - minY, 1),
     };
+};
+
+const getGeneratedPlacementSvg = (cuttingData: Cutting2DNestingResult) => {
+    const contours = getFallbackContours(cuttingData);
+
+    if (contours.length === 0) return '';
+
+    const sheetSize = getPreviewSize(cuttingData);
+    const contourBounds = getContourBounds(contours);
+
+    const minX = Math.min(0, contourBounds.minX);
+    const minY = Math.min(0, contourBounds.minY);
+    const maxX = Math.max(sheetSize.width, contourBounds.minX + contourBounds.width);
+    const maxY = Math.max(sheetSize.height, contourBounds.minY + contourBounds.height);
+
+    const viewBoxWidth = Math.max(maxX - minX, 1);
+    const viewBoxHeight = Math.max(maxY - minY, 1);
+
+    const polygons = contours
+        .map((contour, index) => {
+            const points = contour.points.map((point) => `${point.x},${point.y}`).join(' ');
+
+            return `<polygon points="${points}" fill="rgba(24, 144, 255, 0.2)" stroke="#1677ff" stroke-width="1" data-part-id="${contour.id}" data-sheet-id="${contour.sheetId}" data-index="${index}" />`;
+        })
+        .join('');
+
+    return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${viewBoxWidth}" height="${viewBoxHeight}" viewBox="${minX} ${minY} ${viewBoxWidth} ${viewBoxHeight}" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="${sheetSize.width}" height="${sheetSize.height}" fill="#ffffff" stroke="#bfbfbf" stroke-width="1" />
+    ${polygons}
+</svg>`.trim();
 };
 
 const FallbackPlacementPreview = ({ cuttingData }: { cuttingData: Cutting2DNestingResult }) => {
@@ -115,9 +154,7 @@ const FallbackPlacementPreview = ({ cuttingData }: { cuttingData: Cutting2DNesti
             {contours.map((contour, index) => (
                 <polygon
                     key={`${contour.sheetId}-${contour.id}-${index}`}
-                    points={contour.points
-                        .map((point) => `${point.x},${point.y}`)
-                        .join(' ')}
+                    points={contour.points.map((point) => `${point.x},${point.y}`).join(' ')}
                     className={styles.cutting2D__fallbackPart}
                 />
             ))}
@@ -292,7 +329,11 @@ export const Cutting2D = () => {
     const cuttingData = useAppSelector(selectCalculateData2D);
     const [previewImage, setPreviewImage] = useState('');
     const [previewImageError, setPreviewImageError] = useState('');
-    const previewSvg = withSvgViewBox(cuttingData.svg, cuttingData);
+
+    const generatedPlacementSvg = getGeneratedPlacementSvg(cuttingData);
+    const backendSvg = withSvgViewBox(cuttingData.svg, cuttingData);
+    const previewSvg = generatedPlacementSvg || backendSvg;
+
     const hasValidSvg = isSafeSvg(previewSvg);
     const hasPlacements = cuttingData.placedParts.length > 0;
     const hasWorkpieces = cuttingData.workpieces.some(
@@ -332,6 +373,7 @@ export const Cutting2D = () => {
             <FormContainer>
                 <Cutting2DForm />
             </FormContainer>
+
             <Flex vertical className={styles.cutting2D__result}>
                 {hasResult ? (
                     <>
@@ -341,9 +383,11 @@ export const Cutting2D = () => {
                             previewImage={previewImage}
                             previewSvg={previewSvg}
                         />
+
                         {previewImageError && (
                             <Alert type='warning' showIcon message={previewImageError} />
                         )}
+
                         <ResultSummary cuttingData={cuttingData} />
                     </>
                 ) : hasResponse ? (
@@ -354,6 +398,7 @@ export const Cutting2D = () => {
                     </Flex>
                 )}
             </Flex>
+
             {hasResult && (
                 <Cutting2DDownload
                     hasValidSvg={hasValidSvg}
