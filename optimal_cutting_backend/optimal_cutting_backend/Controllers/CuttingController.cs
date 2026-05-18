@@ -6,6 +6,7 @@ using vega.Controllers.DTO;
 using vega.Migrations.DAL;
 using vega.Migrations.EF;
 using vega.Models;
+using vega.Models.Nesting;
 using vega.Services.Interfaces;
 using vega.Controllers.DTO.Nesting;
 using vega.Services.Interfaces.Nesting;
@@ -20,14 +21,16 @@ namespace vega.Controllers
         private readonly VegaContext _db;
         private readonly IPolygonNestingService _polygonNestingService;
         private readonly IContourBuilderService _contourBuilderService;
+        private readonly ILogger<CuttingController> _logger;
 
-        public CuttingController(ICutting1DService cutting1DService, ICutting2DService cutting2DService, VegaContext db, IPolygonNestingService polygonNestingService, IContourBuilderService contourBuilderService)
+        public CuttingController(ICutting1DService cutting1DService, ICutting2DService cutting2DService, VegaContext db, IPolygonNestingService polygonNestingService, IContourBuilderService contourBuilderService, ILogger<CuttingController> logger)
         {
             _db = db;
             _cutting1DService = cutting1DService;
             _cutting2DService = cutting2DService;
             _polygonNestingService = polygonNestingService;
             _contourBuilderService = contourBuilderService;
+            _logger = logger;
         }
 
         /// <summary>
@@ -153,7 +156,14 @@ namespace vega.Controllers
         [Route("cutting2d/nesting/from-db")]
         public ActionResult CalculatePolygonNestingFromDb([FromBody] Cutting2DNestingFromDbDTO dto)
         {
-            if (dto.DetailIds.Count == 0) return BadRequest("detailIds is empty");
+            if (dto.DetailIds.Count == 0)
+            {
+                return BadRequest(new
+                {
+                    error = "detailIds is empty",
+                    diagnostics = new NestingDiagnostics()
+                });
+            }
 
             var groupedIds = dto.DetailIds.GroupBy(x => x).ToDictionary(g => g.Key, g => g.Count());
             var files = _db.Filenames
@@ -161,19 +171,76 @@ namespace vega.Controllers
                 .Where(f => groupedIds.Keys.Contains(f.Id))
                 .ToList();
 
-            if (files.Count == 0) return BadRequest("details not found");
+            var foundIds = files.Select(f => f.Id).OrderBy(x => x).ToList();
+            var missingIds = groupedIds.Keys.Except(foundIds).OrderBy(x => x).ToList();
+            var diagnostics = new NestingDiagnostics
+            {
+                RequestedDetailIds = dto.DetailIds.ToList(),
+                FoundDetailIds = foundIds,
+                MissingDetailIds = missingIds
+            };
+
+            _logger.LogInformation(
+                "cutting2d/nesting/from-db requested details: {RequestedDetailIds}; found: {FoundDetailIds}; missing: {MissingDetailIds}",
+                string.Join(",", diagnostics.RequestedDetailIds),
+                string.Join(",", diagnostics.FoundDetailIds),
+                string.Join(",", diagnostics.MissingDetailIds));
+
+            if (missingIds.Count > 0)
+            {
+                return BadRequest(new
+                {
+                    error = "some details were not found",
+                    missingDetailIds = missingIds,
+                    diagnostics
+                });
+            }
 
             var parts = new List<NestingPartDto>();
             foreach (var file in files)
             {
+                if (file.Figures.Count == 0)
+                {
+                    AddInvalidDetail(diagnostics, file, "Figures is empty.");
+                    continue;
+                }
+
                 var detail = new Detail2D(file.Figures, file.Designation);
-                _contourBuilderService.BuildGeometry(detail);
-                if (detail.Contour == null || detail.Contour.FilledContours.Count == 0) continue;
+                try
+                {
+                    _contourBuilderService.BuildGeometry(detail);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to build contour for detail {DetailId} ({Designation})", file.Id, file.Designation);
+                    AddInvalidDetail(diagnostics, file, ex.Message);
+                    continue;
+                }
+
+                if (detail.Contour == null)
+                {
+                    AddInvalidDetail(diagnostics, file, "Contour was not built.");
+                    continue;
+                }
+
+                if (detail.Contour.FilledContours.Count == 0)
+                {
+                    AddInvalidDetail(diagnostics, file, "Contour does not contain filled contours.");
+                    continue;
+                }
 
                 var orderedFilled = detail.Contour.FilledContours
+                    .Where(loop => loop.Count >= 3)
                     .OrderByDescending(GetPolygonAbsArea)
                     .ToList();
-                var outerLoop = orderedFilled.First();
+
+                if (orderedFilled.Count == 0)
+                {
+                    AddInvalidDetail(diagnostics, file, "Contour does not contain a valid outer loop.");
+                    continue;
+                }
+
+                var outerLoop = EnsureCounterClockwise(orderedFilled.First());
                 var innerFilledAsHoles = orderedFilled.Skip(1).ToList();
                 var allHoles = innerFilledAsHoles.Concat(detail.Contour.HoleContours).ToList();
 
@@ -183,18 +250,35 @@ namespace vega.Controllers
                     Quantity = groupedIds[file.Id],
                     Outer = new List<List<NestingPointDto>>
                     {
-                        outerLoop.Select(p => new NestingPointDto { X = p.X, Y = p.Y }).ToList()
+                        ToNestingLoop(outerLoop)
                     },
                     Holes = allHoles
+                        .Where(loop => loop.Count >= 3)
                         .Select(loop => new List<List<NestingPointDto>>
                         {
-                            loop.Select(p => new NestingPointDto { X = p.X, Y = p.Y }).ToList()
+                            ToNestingLoop(EnsureClockwise(loop))
                         })
                         .ToList()
                 });
             }
 
-            if (parts.Count == 0) return BadRequest("cannot build contours from details");
+            diagnostics.GeneratedParts = parts.Count;
+            diagnostics.GeneratedPartInstances = parts.Sum(p => p.Quantity);
+
+            _logger.LogInformation(
+                "cutting2d/nesting/from-db generated {GeneratedParts} part types / {GeneratedPartInstances} instances; invalid details: {InvalidDetailCount}",
+                diagnostics.GeneratedParts,
+                diagnostics.GeneratedPartInstances,
+                diagnostics.InvalidDetails.Count);
+
+            if (parts.Count == 0)
+            {
+                return BadRequest(new
+                {
+                    error = "cannot build contours from details",
+                    diagnostics
+                });
+            }
 
             var nestingDto = new Cutting2DNestingDTO
             {
@@ -207,21 +291,81 @@ namespace vega.Controllers
                 AllowedRotationsDegrees = dto.AllowedRotationsDegrees
             };
 
-            var res = _polygonNestingService.Nest(nestingDto);
+            NestingResult res;
+            try
+            {
+                res = _polygonNestingService.Nest(nestingDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Polygon nesting failed for details {RequestedDetailIds}", string.Join(",", diagnostics.RequestedDetailIds));
+                return BadRequest(new
+                {
+                    error = "nesting failed",
+                    message = ex.Message,
+                    diagnostics
+                });
+            }
+
+            diagnostics.PlacedParts = res.PlacedParts.Count;
+            diagnostics.UnplacedParts = res.UnplacedParts.Count;
+            res.Diagnostics = diagnostics;
+
+            _logger.LogInformation(
+                "cutting2d/nesting/from-db solver returned {PlacedParts} placed and {UnplacedParts} unplaced parts",
+                diagnostics.PlacedParts,
+                diagnostics.UnplacedParts);
+
             return Ok(res);
         }
 
+        private static void AddInvalidDetail(NestingDiagnostics diagnostics, Filename file, string reason)
+        {
+            diagnostics.InvalidDetails.Add(new NestingDetailDiagnostic
+            {
+                DetailId = file.Id,
+                Designation = file.Designation,
+                Name = file.Name,
+                Reason = reason
+            });
+        }
+
+        private static List<NestingPointDto> ToNestingLoop(List<Point2D> loop)
+            => TrimClosingPoint(loop)
+                .Select(p => new NestingPointDto { X = p.X, Y = p.Y })
+                .ToList();
+
+        private static List<Point2D> EnsureCounterClockwise(List<Point2D> loop)
+            => GetPolygonSignedArea(loop) >= 0 ? loop : loop.AsEnumerable().Reverse().ToList();
+
+        private static List<Point2D> EnsureClockwise(List<Point2D> loop)
+            => GetPolygonSignedArea(loop) <= 0 ? loop : loop.AsEnumerable().Reverse().ToList();
+
+        private static List<Point2D> TrimClosingPoint(List<Point2D> loop)
+        {
+            if (loop.Count > 1 && Math.Abs(loop[0].X - loop[^1].X) < 0.0001 && Math.Abs(loop[0].Y - loop[^1].Y) < 0.0001)
+            {
+                return loop.Take(loop.Count - 1).ToList();
+            }
+
+            return loop;
+        }
+
         private static double GetPolygonAbsArea(List<Point2D> loop)
+            => Math.Abs(GetPolygonSignedArea(loop));
+
+        private static double GetPolygonSignedArea(List<Point2D> loop)
         {
             if (loop.Count < 3) return 0;
+            var points = TrimClosingPoint(loop);
             double area = 0;
-            for (var i = 0; i < loop.Count; i++)
+            for (var i = 0; i < points.Count; i++)
             {
-                var a = loop[i];
-                var b = loop[(i + 1) % loop.Count];
+                var a = points[i];
+                var b = points[(i + 1) % points.Count];
                 area += (a.X * b.Y) - (b.X * a.Y);
             }
-            return Math.Abs(area) * 0.5;
+            return area * 0.5;
         }
 
     }
